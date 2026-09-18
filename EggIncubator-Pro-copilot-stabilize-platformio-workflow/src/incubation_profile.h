@@ -26,21 +26,23 @@ struct IncubationProfileData
 class IncubationProfile
 {
 public:
-    static void begin(IncubationProfileType profile, uint32_t startMillis);
-    static void setProfile(IncubationProfileType profile, uint32_t nowMillis);
+    static void begin(IncubationProfileType profile, uint32_t startEpoch);
+    static void setProfile(IncubationProfileType profile, uint32_t nowEpoch);
+    static void setStartEpoch(uint32_t startEpoch);
+    static uint32_t getStartEpoch();
 
     static const IncubationProfileData& current();
-    static uint16_t currentDay(uint32_t nowMillis); // day starts from 1
-    static bool isLockdown(uint32_t nowMillis);
-    static bool isHatchFinished(uint32_t nowMillis);
+    static uint16_t currentDay(uint32_t nowEpoch); // day starts from 1
+    static bool isLockdown(uint32_t nowEpoch);
+    static bool isHatchFinished(uint32_t nowEpoch);
 
     // NEW: MQTT/HA helpers
     static const char* currentCode(); // "CHICKEN", "QUAIL", "DUCK", "GOOSE"
-    static bool setProfileByCode(const String& code, uint32_t nowMillis);
+    static bool setProfileByCode(const String& code, uint32_t nowEpoch);
 
 private:
     static IncubationProfileType activeProfile;
-    static uint32_t batchStartMillis;
+    static uint32_t batchStartEpoch;
     static const IncubationProfileData profiles[4];
 };
 

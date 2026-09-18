@@ -1,303 +1,253 @@
 #include "egg_turner_manager.h"
 
 #include "relay_controller.h"
-#include "logger.h"
+#include "sensor_manager.h"
 #include "pins.h"
+#include "system_state.h"
+#include "incubation_profile.h"
 
-/******************************************************
- * Static Member Initialization
- ******************************************************/
-
-uint32_t EggTurnerManager::turningIntervalMs = 120000UL;  // 2 minutes (default)
-uint32_t EggTurnerManager::turnDurationMs = 5000UL;       // 5 seconds (default)
+uint32_t EggTurnerManager::turningIntervalMs = 120000UL;
+uint32_t EggTurnerManager::turnDurationMs = 5000UL;
 
 bool EggTurnerManager::controlEnabled = false;
-bool EggTurnerManager::turnerRunning = false;
-
+bool EggTurnerManager::manualRequest = false;
+EggTurnerManager::TurnerState EggTurnerManager::state = EggTurnerManager::TurnerState::IDLE;
+uint32_t EggTurnerManager::stateStartMs = 0;
 uint32_t EggTurnerManager::lastTurnTime = 0;
-uint32_t EggTurnerManager::turnStartTime = 0;
 uint32_t EggTurnerManager::totalTurns = 0;
+bool EggTurnerManager::nextMoveToEnd = true;
 
-uint8_t EggTurnerManager::motorLeftPin = PIN_MOTOR_LEFT;
-uint8_t EggTurnerManager::motorRightPin = PIN_MOTOR_RIGHT;
-
-EggTurnerManager::TurnDirection EggTurnerManager::lastTurnDirection = LEFT;
-
-/******************************************************
- * Initialize Egg Turner Manager
- ******************************************************/
+namespace
+{
+constexpr uint32_t MAX_MOVE_TIMEOUT_MS = 12000;
+}
 
 void EggTurnerManager::begin()
 {
-    Logger::info("--------------------------------");
-    Logger::info("Egg Turner Manager Started");
-    Logger::info("--------------------------------");
+    pinMode(PIN_LIMIT_HOME, INPUT_PULLUP);
+    pinMode(PIN_LIMIT_END, INPUT_PULLUP);
 
-    // Setup motor pins
-    pinMode(motorLeftPin, OUTPUT);
-    pinMode(motorRightPin, OUTPUT);
-
-    // Ensure motor is stopped
-    digitalWrite(motorLeftPin, LOW);
-    digitalWrite(motorRightPin, LOW);
-
-    Logger::info(
-        ("Turning Interval: " + String(turningIntervalMs / 60000.0f, 1) + " minutes").c_str());
-    Logger::info(
-        ("Turn Duration: " + String(turnDurationMs / 1000.0f, 1) + " seconds").c_str());
+    stopMotor();
+    state = TurnerState::IDLE;
+    stateStartMs = millis();
 }
-
-/******************************************************
- * Update - Check if turning is needed
- ******************************************************/
 
 void EggTurnerManager::update()
 {
-    if (!controlEnabled)
+    const uint32_t now = millis();
+
+    const bool atHome = (digitalRead(PIN_LIMIT_HOME) == INPUT_ACTIVE);
+    const bool atEnd = (digitalRead(PIN_LIMIT_END) == INPUT_ACTIVE);
+
+    if (atHome && atEnd)
     {
-        return;
-    }
-
-    uint32_t now = millis();
-
-    // Check if currently turning and need to stop
-    if (turnerRunning)
-    {
-        uint32_t turnElapsed = now - turnStartTime;
-
-        if (turnElapsed >= turnDurationMs)
-        {
-            stopTurner();
-            turnerRunning = false;
-        }
+        setFault(FAULT_LIMIT_INCONSISTENT, true, "Both limit switches active");
+        state = TurnerState::FAULT;
+        stopMotor();
     }
     else
     {
-        // Check if time for next turn
-        uint32_t timeSinceLastTurn = now - lastTurnTime;
-
-        if (timeSinceLastTurn >= turningIntervalMs)
-        {
-            performTurn();
-        }
+        setFault(FAULT_LIMIT_INCONSISTENT, false);
     }
-}
 
-/******************************************************
- * Set Turning Interval (minutes)
- ******************************************************/
+    if (SensorManager::isDoorOpen())
+    {
+        stopMotor();
+        setFault(FAULT_DOOR_OPEN, true, "Door opened while turner active");
+        if (state == TurnerState::MOVE_TO_HOME || state == TurnerState::MOVE_TO_END)
+        {
+            state = TurnerState::WAIT;
+        }
+        return;
+    }
+
+    if (!controlEnabled || hasFault(FAULT_TURN_TIMEOUT) || hasFault(FAULT_LIMIT_INCONSISTENT))
+    {
+        stopMotor();
+        if (state != TurnerState::FAULT)
+        {
+            state = TurnerState::IDLE;
+        }
+        return;
+    }
+
+    if (IncubationProfile::isLockdown(IncubationProfile::getStartEpoch() + (millis() / 1000UL)))
+    {
+        stopMotor();
+        state = TurnerState::IDLE;
+        return;
+    }
+
+    switch (state)
+    {
+        case TurnerState::IDLE:
+        case TurnerState::WAIT:
+        {
+            const bool due = (now - lastTurnTime) >= turningIntervalMs;
+            if (manualRequest || due)
+            {
+                manualRequest = false;
+                if (nextMoveToEnd) startMoveToEnd();
+                else startMoveToHome();
+            }
+            break;
+        }
+
+        case TurnerState::MOVE_TO_HOME:
+            if (atHome)
+            {
+                stopMotor();
+                state = TurnerState::WAIT;
+                lastTurnTime = now;
+                totalTurns++;
+                nextMoveToEnd = true;
+                setFault(FAULT_TURN_TIMEOUT, false);
+            }
+            else if ((now - stateStartMs) > MAX_MOVE_TIMEOUT_MS)
+            {
+                stopMotor();
+                state = TurnerState::FAULT;
+                setFault(FAULT_TURN_TIMEOUT, true, "Turner timeout to HOME");
+            }
+            break;
+
+        case TurnerState::MOVE_TO_END:
+            if (atEnd)
+            {
+                stopMotor();
+                state = TurnerState::WAIT;
+                lastTurnTime = now;
+                totalTurns++;
+                nextMoveToEnd = false;
+                setFault(FAULT_TURN_TIMEOUT, false);
+            }
+            else if ((now - stateStartMs) > MAX_MOVE_TIMEOUT_MS)
+            {
+                stopMotor();
+                state = TurnerState::FAULT;
+                setFault(FAULT_TURN_TIMEOUT, true, "Turner timeout to END");
+            }
+            break;
+
+        case TurnerState::FAULT:
+        default:
+            stopMotor();
+            break;
+    }
+
+    systemState.output.motorEnable = (state == TurnerState::MOVE_TO_HOME || state == TurnerState::MOVE_TO_END);
+}
 
 void EggTurnerManager::setTurningInterval(uint16_t intervalMinutes)
 {
-    turningIntervalMs = static_cast<uint32_t>(intervalMinutes) * 60000UL;  // Convert to milliseconds
-
-    Logger::info(
-        ("Turning Interval Set: " + String(intervalMinutes) + " minutes").c_str());
+    turningIntervalMs = static_cast<uint32_t>(intervalMinutes) * 60000UL;
 }
-
-/******************************************************
- * Get Turning Interval (minutes)
- ******************************************************/
 
 uint16_t EggTurnerManager::getTurningInterval()
 {
     return static_cast<uint16_t>(turningIntervalMs / 60000UL);
 }
 
-/******************************************************
- * Set Turn Duration (seconds)
- ******************************************************/
-
 void EggTurnerManager::setTurnDuration(uint16_t durationSeconds)
 {
-    turnDurationMs = static_cast<uint32_t>(durationSeconds) * 1000UL;  // Convert to milliseconds
-
-    Logger::info(
-        ("Turn Duration Set: " + String(durationSeconds) + " seconds").c_str());
+    turnDurationMs = static_cast<uint32_t>(durationSeconds) * 1000UL;
 }
-
-/******************************************************
- * Get Turn Duration (seconds)
- ******************************************************/
 
 uint16_t EggTurnerManager::getTurnDuration()
 {
     return static_cast<uint16_t>(turnDurationMs / 1000UL);
 }
 
-/******************************************************
- * Manual Turn - Perform immediately
- ******************************************************/
-
 void EggTurnerManager::manualTurn()
 {
-    if (controlEnabled)
-    {
-        performTurn();
-        Logger::info("Manual turn initiated");
-    }
+    manualRequest = true;
 }
 
-/******************************************************
- * Enable Egg Turning
- ******************************************************/
+void EggTurnerManager::requestMoveHome()
+{
+    manualRequest = false;
+    startMoveToHome();
+}
+
+void EggTurnerManager::requestMoveEnd()
+{
+    manualRequest = false;
+    startMoveToEnd();
+}
 
 void EggTurnerManager::enable()
 {
-    if (!controlEnabled)
-    {
-        controlEnabled = true;
-        lastTurnTime = millis();
-        totalTurns = 0;
-        turnerRunning = false;
-
-        Logger::info("Egg Turning ENABLED");
-    }
+    controlEnabled = true;
+    systemState.incubation.turningEnabled = true;
 }
-
-/******************************************************
- * Disable Egg Turning
- ******************************************************/
 
 void EggTurnerManager::disable()
 {
-    if (controlEnabled)
-    {
-        controlEnabled = false;
-
-        // Stop motor if running
-        if (turnerRunning)
-        {
-            stopTurner();
-            turnerRunning = false;
-        }
-
-        Logger::info("Egg Turning DISABLED");
-    }
+    controlEnabled = false;
+    systemState.incubation.turningEnabled = false;
+    stopMotor();
+    state = TurnerState::IDLE;
 }
-
-/******************************************************
- * Is Egg Turning Enabled
- ******************************************************/
 
 bool EggTurnerManager::isEnabled()
 {
     return controlEnabled;
 }
 
-/******************************************************
- * Check if Turner is Currently Running
- ******************************************************/
-
 bool EggTurnerManager::isTurnerRunning()
 {
-    return turnerRunning;
+    return state == TurnerState::MOVE_TO_HOME || state == TurnerState::MOVE_TO_END;
 }
 
-/******************************************************
- * Get Last Turn Time (ms since start)
- ******************************************************/
-
-uint32_t EggTurnerManager::getLastTurnTime()
-{
-    return lastTurnTime;
-}
-
-/******************************************************
- * Get Time Until Next Turn (ms)
- ******************************************************/
+uint32_t EggTurnerManager::getLastTurnTime() { return lastTurnTime; }
 
 uint32_t EggTurnerManager::getTimeUntilNextTurn()
 {
-    uint32_t now = millis();
-    uint32_t timeSinceLastTurn = now - lastTurnTime;
-
-    if (timeSinceLastTurn >= turningIntervalMs)
-    {
-        return 0;  // Turn is due now
-    }
-
-    return turningIntervalMs - timeSinceLastTurn;
+    const uint32_t now = millis();
+    if (now - lastTurnTime >= turningIntervalMs) return 0;
+    return turningIntervalMs - (now - lastTurnTime);
 }
 
-/******************************************************
- * Get Total Turn Count
- ******************************************************/
+uint32_t EggTurnerManager::getTurnCount() { return totalTurns; }
 
-uint32_t EggTurnerManager::getTurnCount()
+const char* EggTurnerManager::getStateName()
 {
-    return totalTurns;
-}
-
-/******************************************************
- * Perform a Single Turn
- ******************************************************/
-
-void EggTurnerManager::performTurn()
-{
-    if (turnerRunning)
+    switch (state)
     {
-        return;  // Already turning
-    }
-
-    // Determine next turn direction (alternate left/right)
-    TurnDirection nextDirection = getOppositeTurnDirection(lastTurnDirection);
-
-    // Start motor
-    setMotorDirection(nextDirection);
-    turnerRunning = true;
-    turnStartTime = millis();
-
-    totalTurns++;
-    lastTurnDirection = nextDirection;
-
-    Logger::info(
-        ("Turn #" + String(totalTurns) +
-         " started (" + String(nextDirection == LEFT ? "LEFT" : "RIGHT") + ")").c_str());
-}
-
-/******************************************************
- * Stop Turner Motor
- ******************************************************/
-
-void EggTurnerManager::stopTurner()
-{
-    digitalWrite(motorLeftPin, LOW);
-    digitalWrite(motorRightPin, LOW);
-
-    lastTurnTime = millis();
-
-    Logger::debug(
-        ("Turn completed. Next turn in " +
-         String(turningIntervalMs / 60000.0f, 1) + " minutes").c_str());
-}
-
-/******************************************************
- * Set Motor Direction
- ******************************************************/
-
-void EggTurnerManager::setMotorDirection(TurnDirection direction)
-{
-    if (direction == LEFT)
-    {
-        // Turn left: motorLeftPin HIGH, motorRightPin LOW
-        digitalWrite(motorLeftPin, HIGH);
-        digitalWrite(motorRightPin, LOW);
-    }
-    else  // RIGHT
-    {
-        // Turn right: motorLeftPin LOW, motorRightPin HIGH
-        digitalWrite(motorLeftPin, LOW);
-        digitalWrite(motorRightPin, HIGH);
+        case TurnerState::IDLE: return "IDLE";
+        case TurnerState::MOVE_TO_HOME: return "MOVE_TO_HOME";
+        case TurnerState::MOVE_TO_END: return "MOVE_TO_END";
+        case TurnerState::WAIT: return "WAIT";
+        case TurnerState::FAULT: return "FAULT";
+        default: return "UNKNOWN";
     }
 }
 
-/******************************************************
- * Get Opposite Turn Direction
- ******************************************************/
-
-EggTurnerManager::TurnDirection EggTurnerManager::getOppositeTurnDirection(
-    TurnDirection direction)
+void EggTurnerManager::stopMotor()
 {
-    return (direction == LEFT) ? RIGHT : LEFT;
+    RelayController::motor(false, false, false);
+}
+
+void EggTurnerManager::startMoveToHome()
+{
+    if (SensorManager::isDoorOpen())
+    {
+        return;
+    }
+
+    state = TurnerState::MOVE_TO_HOME;
+    stateStartMs = millis();
+    RelayController::motor(true, true, false);
+}
+
+void EggTurnerManager::startMoveToEnd()
+{
+    if (SensorManager::isDoorOpen())
+    {
+        return;
+    }
+
+    state = TurnerState::MOVE_TO_END;
+    stateStartMs = millis();
+    RelayController::motor(true, false, true);
 }

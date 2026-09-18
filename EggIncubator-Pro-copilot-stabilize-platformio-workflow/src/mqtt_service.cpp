@@ -2,18 +2,65 @@
 
 #include <WiFi.h>
 #include "app_config.h"
-#include "logger.h"
 #include "sensor_manager.h"
 #include "network_service.h"
 #include "relay_controller.h"
 #include "managers/egg_turner_manager.h"
+#include "managers/temperature_manager.h"
+#include "managers/humidity_manager.h"
 #include "incubation_profile.h"
+#include "system_state.h"
 
 extern MQTTService mqtt;
 extern NetworkService network;
 
-static constexpr uint32_t RECONNECT_INTERVAL = 5000;
-static constexpr uint32_t PUBLISH_INTERVAL   = 10000;
+namespace
+{
+constexpr uint32_t RECONNECT_INTERVAL = 5000;
+constexpr uint32_t PUBLISH_INTERVAL = 10000;
+
+String topic(const char *suffix)
+{
+    return String(MQTT_ROOT_TOPIC) + "/" + suffix;
+}
+
+bool parseOnOff(const String &input, bool &out)
+{
+    if (input == "ON")
+    {
+        out = true;
+        return true;
+    }
+    if (input == "OFF")
+    {
+        out = false;
+        return true;
+    }
+    return false;
+}
+
+void applyMode(SystemMode mode)
+{
+    systemState.mode = mode;
+
+    if (mode == SystemMode::OFF || mode == SystemMode::ALARM)
+    {
+        TemperatureManager::disable();
+        HumidityManager::disable();
+        EggTurnerManager::disable();
+        RelayController::allOff();
+    }
+    else if (mode == SystemMode::AUTO)
+    {
+        TemperatureManager::enable();
+        HumidityManager::enable();
+        if (systemState.incubation.turningEnabled)
+        {
+            EggTurnerManager::enable();
+        }
+    }
+}
+}
 
 MQTTService::MQTTService()
     : mqttClient(wifiClient),
@@ -29,19 +76,8 @@ void MQTTService::begin()
     mqttClient.setServer(MQTT_HOST, MQTT_PORT);
     mqttClient.setKeepAlive(60);
     mqttClient.setSocketTimeout(15);
-    mqttClient.setBufferSize(1024);
+    mqttClient.setBufferSize(1536);
     mqttClient.setCallback(callback);
-
-    mqttConnected = false;
-    discoveryPublished = false;
-    lastReconnect = 0;
-    lastPublish = 0;
-
-    Serial.println("[MQTT] Service Started");
-    Serial.print("[MQTT] Broker: ");
-    Serial.print(MQTT_HOST);
-    Serial.print(":");
-    Serial.println(MQTT_PORT);
 }
 
 bool MQTTService::connected()
@@ -72,6 +108,7 @@ void MQTTService::loop()
         publishDiagnostics();
         publishRelayStates();
         publishSensorStates();
+        publishFaults();
     }
 }
 
@@ -80,61 +117,55 @@ void MQTTService::reconnect()
     if (millis() - lastReconnect < RECONNECT_INTERVAL) return;
     lastReconnect = millis();
 
-    Serial.println("[MQTT] reconnecting...");
-
-    bool ok = mqttClient.connect(
+    const bool ok = mqttClient.connect(
         DEVICE_ID,
         MQTT_USERNAME,
         MQTT_PASSWORD,
-        MQTT_ROOT_TOPIC "/status",
+        topic("status").c_str(),
         0,
         true,
-        "offline"
-    );
+        "offline");
 
     if (!ok)
     {
         mqttConnected = false;
-        Serial.print("[MQTT] Connect Failed, state=");
-        Serial.println(mqttClient.state());
         return;
     }
 
     mqttConnected = true;
-    Serial.println("[MQTT] Connected");
-
     publishBirthMessage();
     subscribeTopics();
     publishDiscovery();
-    publishRelayStates();
-    publishDiagnostics();
-    publishSensorStates();
+    publishAll();
 }
 
 void MQTTService::subscribeTopics()
 {
-    mqttClient.subscribe(MQTT_ROOT_TOPIC "/heater/set");
-    mqttClient.subscribe(MQTT_ROOT_TOPIC "/humidifier/set");
-    mqttClient.subscribe(MQTT_ROOT_TOPIC "/fan/set");
-    mqttClient.subscribe(MQTT_ROOT_TOPIC "/vent/set");
-    mqttClient.subscribe(MQTT_ROOT_TOPIC "/turner/set");
-    mqttClient.subscribe(MQTT_ROOT_TOPIC "/profile/set");
-    Serial.println("[MQTT] Subscribe OK");
+    mqttClient.subscribe(topic("mode/set").c_str());
+    mqttClient.subscribe(topic("start/set").c_str());
+    mqttClient.subscribe(topic("target/temperature/set").c_str());
+    mqttClient.subscribe(topic("target/humidity/set").c_str());
+    mqttClient.subscribe(topic("profile/set").c_str());
+    mqttClient.subscribe(topic("relay/heater/set").c_str());
+    mqttClient.subscribe(topic("relay/humidifier/set").c_str());
+    mqttClient.subscribe(topic("relay/fan/set").c_str());
+    mqttClient.subscribe(topic("relay/vent/set").c_str());
+    mqttClient.subscribe(topic("turner/set").c_str());
+    mqttClient.subscribe(topic("turner/command").c_str());
 }
 
 void MQTTService::publishBirthMessage()
 {
-    mqttClient.publish(MQTT_ROOT_TOPIC "/status", "online", true);
-    mqttClient.publish(MQTT_ROOT_TOPIC "/ip", WiFi.localIP().toString().c_str(), true);
-    mqttClient.publish(MQTT_ROOT_TOPIC "/rssi", String(WiFi.RSSI()).c_str(), true);
-#ifdef FIRMWARE_VERSION
-    mqttClient.publish(MQTT_ROOT_TOPIC "/firmware", FIRMWARE_VERSION, true);
-#endif
+    publish(topic("status"), "online", true);
+    publish(topic("mode/state"), modeToString(systemState.mode), true);
 }
 
 void MQTTService::publishDiscovery()
 {
-    if (discoveryPublished) return;
+    if (discoveryPublished)
+    {
+        return;
+    }
 
     const String deviceJson =
         "\"device\":{\"identifiers\":[\"" DEVICE_ID "\"],"
@@ -143,150 +174,78 @@ void MQTTService::publishDiscovery()
         "\"model\":\"EggIncubator Pro\","
         "\"sw_version\":\"" FIRMWARE_VERSION "\"}";
 
-    publish("homeassistant/switch/" DEVICE_ID "/heater/config",
-            "{"
-            "\"name\":\"Heater\","
-            "\"uniq_id\":\"" DEVICE_ID "_heater\","
-            "\"cmd_t\":\"" MQTT_ROOT_TOPIC "/heater/set\","
-            "\"stat_t\":\"" MQTT_ROOT_TOPIC "/heater/state\","
-            "\"pl_on\":\"ON\",\"pl_off\":\"OFF\","
-            "\"avty_t\":\"" MQTT_ROOT_TOPIC "/status\","
-            "\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\","
-            + deviceJson + "}", true);
-
-    publish("homeassistant/switch/" DEVICE_ID "/humidifier/config",
-            "{"
-            "\"name\":\"Humidifier\","
-            "\"uniq_id\":\"" DEVICE_ID "_humidifier\","
-            "\"cmd_t\":\"" MQTT_ROOT_TOPIC "/humidifier/set\","
-            "\"stat_t\":\"" MQTT_ROOT_TOPIC "/humidifier/state\","
-            "\"pl_on\":\"ON\",\"pl_off\":\"OFF\","
-            "\"avty_t\":\"" MQTT_ROOT_TOPIC "/status\","
-            "\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\","
-            + deviceJson + "}", true);
-
-    publish("homeassistant/switch/" DEVICE_ID "/fan/config",
-            "{"
-            "\"name\":\"Circulation Fan\","
-            "\"uniq_id\":\"" DEVICE_ID "_fan\","
-            "\"cmd_t\":\"" MQTT_ROOT_TOPIC "/fan/set\","
-            "\"stat_t\":\"" MQTT_ROOT_TOPIC "/fan/state\","
-            "\"pl_on\":\"ON\",\"pl_off\":\"OFF\","
-            "\"avty_t\":\"" MQTT_ROOT_TOPIC "/status\","
-            "\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\","
-            + deviceJson + "}", true);
-
-    publish("homeassistant/switch/" DEVICE_ID "/vent/config",
-            "{"
-            "\"name\":\"Ventilation Fan\","
-            "\"uniq_id\":\"" DEVICE_ID "_vent\","
-            "\"cmd_t\":\"" MQTT_ROOT_TOPIC "/vent/set\","
-            "\"stat_t\":\"" MQTT_ROOT_TOPIC "/vent/state\","
-            "\"pl_on\":\"ON\",\"pl_off\":\"OFF\","
-            "\"avty_t\":\"" MQTT_ROOT_TOPIC "/status\","
-            "\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\","
-            + deviceJson + "}", true);
-
-    publish("homeassistant/switch/" DEVICE_ID "/turner/config",
-            "{"
-            "\"name\":\"Egg Turner\","
-            "\"uniq_id\":\"" DEVICE_ID "_turner\","
-            "\"cmd_t\":\"" MQTT_ROOT_TOPIC "/turner/set\","
-            "\"stat_t\":\"" MQTT_ROOT_TOPIC "/turner/state\","
-            "\"pl_on\":\"ON\",\"pl_off\":\"OFF\","
-            "\"avty_t\":\"" MQTT_ROOT_TOPIC "/status\","
-            "\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\","
-            + deviceJson + "}", true);
-
-    publish("homeassistant/select/" DEVICE_ID "/profile/config",
-            "{"
-            "\"name\":\"Incubation Profile\","
-            "\"uniq_id\":\"" DEVICE_ID "_profile\","
-            "\"cmd_t\":\"" MQTT_ROOT_TOPIC "/profile/set\","
-            "\"stat_t\":\"" MQTT_ROOT_TOPIC "/profile/state\","
-            "\"options\":[\"CHICKEN\",\"QUAIL\",\"DUCK\",\"GOOSE\"],"
-            "\"avty_t\":\"" MQTT_ROOT_TOPIC "/status\","
-            "\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\","
-            + deviceJson + "}", true);
-
+    publish("homeassistant/sensor/" DEVICE_ID "/air_temp/config",
+            "{\"name\":\"Air Temperature\",\"uniq_id\":\"" DEVICE_ID "_air_temp\",\"stat_t\":\"" MQTT_ROOT_TOPIC "/temperature/air\",\"unit_of_meas\":\"°C\",\"dev_cla\":\"temperature\",\"avty_t\":\"" MQTT_ROOT_TOPIC "/status\"," + deviceJson + "}", true);
+    publish("homeassistant/sensor/" DEVICE_ID "/air_humidity/config",
+            "{\"name\":\"Air Humidity\",\"uniq_id\":\"" DEVICE_ID "_air_humidity\",\"stat_t\":\"" MQTT_ROOT_TOPIC "/humidity/air\",\"unit_of_meas\":\"%\",\"dev_cla\":\"humidity\",\"avty_t\":\"" MQTT_ROOT_TOPIC "/status\"," + deviceJson + "}", true);
+    publish("homeassistant/sensor/" DEVICE_ID "/egg_temp/config",
+            "{\"name\":\"Egg Temperature\",\"uniq_id\":\"" DEVICE_ID "_egg_temp\",\"stat_t\":\"" MQTT_ROOT_TOPIC "/temperature/egg\",\"unit_of_meas\":\"°C\",\"dev_cla\":\"temperature\",\"avty_t\":\"" MQTT_ROOT_TOPIC "/status\"," + deviceJson + "}", true);
     publish("homeassistant/sensor/" DEVICE_ID "/incubation_day/config",
-            "{"
-            "\"name\":\"Incubation Day\","
-            "\"uniq_id\":\"" DEVICE_ID "_incubation_day\","
-            "\"stat_t\":\"" MQTT_ROOT_TOPIC "/incubation_day\","
-            "\"icon\":\"mdi:calendar-clock\","
-            "\"avty_t\":\"" MQTT_ROOT_TOPIC "/status\","
-            "\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\","
-            + deviceJson + "}", true);
+            "{\"name\":\"Incubation Day\",\"uniq_id\":\"" DEVICE_ID "_day\",\"stat_t\":\"" MQTT_ROOT_TOPIC "/incubation/day\",\"icon\":\"mdi:calendar\",\"avty_t\":\"" MQTT_ROOT_TOPIC "/status\"," + deviceJson + "}", true);
+    publish("homeassistant/sensor/" DEVICE_ID "/fault/config",
+            "{\"name\":\"Incubator Fault\",\"uniq_id\":\"" DEVICE_ID "_fault\",\"stat_t\":\"" MQTT_ROOT_TOPIC "/fault/state\",\"icon\":\"mdi:alert\",\"avty_t\":\"" MQTT_ROOT_TOPIC "/status\"," + deviceJson + "}", true);
+    publish("homeassistant/sensor/" DEVICE_ID "/turner_state/config",
+            "{\"name\":\"Turner State\",\"uniq_id\":\"" DEVICE_ID "_turner_state\",\"stat_t\":\"" MQTT_ROOT_TOPIC "/turner/state\",\"icon\":\"mdi:rotate-right\",\"avty_t\":\"" MQTT_ROOT_TOPIC "/status\"," + deviceJson + "}", true);
+    publish("homeassistant/sensor/" DEVICE_ID "/mode/config",
+            "{\"name\":\"Mode\",\"uniq_id\":\"" DEVICE_ID "_mode\",\"stat_t\":\"" MQTT_ROOT_TOPIC "/mode/state\",\"icon\":\"mdi:toggle-switch\",\"avty_t\":\"" MQTT_ROOT_TOPIC "/status\"," + deviceJson + "}", true);
 
-    publish("homeassistant/sensor/" DEVICE_ID "/stage/config",
-            "{"
-            "\"name\":\"Incubation Stage\","
-            "\"uniq_id\":\"" DEVICE_ID "_stage\","
-            "\"stat_t\":\"" MQTT_ROOT_TOPIC "/stage\","
-            "\"icon\":\"mdi:egg-easter\","
-            "\"avty_t\":\"" MQTT_ROOT_TOPIC "/status\","
-            "\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\","
-            + deviceJson + "}", true);
-
+    systemState.haDiscoveryPublished = true;
     discoveryPublished = true;
-    Serial.println("[MQTT] Discovery published");
 }
 
-bool MQTTService::publish(const char *topic, const char *payload, bool retained)
+bool MQTTService::publish(const char *topicName, const char *payload, bool retained)
 {
     if (!mqttClient.connected()) return false;
-    return mqttClient.publish(topic, payload, retained);
+    return mqttClient.publish(topicName, payload, retained);
 }
 
-bool MQTTService::publish(const String &topic, const String &payload, bool retained)
+bool MQTTService::publish(const String &topicName, const String &payload, bool retained)
 {
-    return publish(topic.c_str(), payload.c_str(), retained);
+    return publish(topicName.c_str(), payload.c_str(), retained);
 }
 
 void MQTTService::publishAvailability()
 {
-    publish(MQTT_ROOT_TOPIC "/status", "online", true);
+    publish(topic("status"), "online", true);
 }
 
 void MQTTService::publishRelayStates()
 {
-    // Vì RelayController chưa có getter state trong header bạn gửi,
-    // tạm publish OFF cho 4 relay này để không phụ thuộc IncubatorController.
-    // Khi bạn có getter thật, mình đổi lại sau.
-    publish(MQTT_ROOT_TOPIC "/heater/state", "OFF", true);
-    publish(MQTT_ROOT_TOPIC "/humidifier/state", "OFF", true);
-    publish(MQTT_ROOT_TOPIC "/fan/state", "OFF", true);
-    publish(MQTT_ROOT_TOPIC "/vent/state", "OFF", true);
+    publish(topic("relay/heater/state"), RelayController::heaterState() ? "ON" : "OFF", true);
+    publish(topic("relay/humidifier/state"), RelayController::humidifierState() ? "ON" : "OFF", true);
+    publish(topic("relay/fan/state"), RelayController::fanState() ? "ON" : "OFF", true);
+    publish(topic("relay/vent/state"), RelayController::ventilationState() ? "ON" : "OFF", true);
 
-    publish(MQTT_ROOT_TOPIC "/turner/state", EggTurnerManager::isEnabled() ? "ON" : "OFF", true);
-    publish(MQTT_ROOT_TOPIC "/turn_count", String(EggTurnerManager::getTurnCount()), true);
-
-    publish(MQTT_ROOT_TOPIC "/profile/state", IncubationProfile::currentCode(), true);
-    publish(MQTT_ROOT_TOPIC "/incubation_day", String(IncubationProfile::currentDay(millis())), true);
-    publish(MQTT_ROOT_TOPIC "/stage", IncubationProfile::isLockdown(millis()) ? "LOCKDOWN" : "INCUBATION", true);
+    publish(topic("turner/state"), EggTurnerManager::getStateName(), true);
+    publish(topic("turner/enabled"), EggTurnerManager::isEnabled() ? "ON" : "OFF", true);
+    publish(topic("mode/state"), modeToString(systemState.mode), true);
+    publish(topic("start/state"), systemState.incubation.incubationRunning ? "ON" : "OFF", true);
+    publish(topic("target/temperature/state"), String(systemState.incubation.targetTemperature, 2), true);
+    publish(topic("target/humidity/state"), String(systemState.incubation.targetHumidity, 1), true);
+    publish(topic("profile/state"), systemState.incubation.profileCode, true);
 }
 
 void MQTTService::publishDiagnostics()
 {
-    publish(MQTT_ROOT_TOPIC "/ip", WiFi.localIP().toString(), true);
-    publish(MQTT_ROOT_TOPIC "/rssi", String(WiFi.RSSI()), true);
-    publish(MQTT_ROOT_TOPIC "/uptime", String(millis() / 1000), true);
-    publish(MQTT_ROOT_TOPIC "/free_heap", String(ESP.getFreeHeap()), true);
+    publish(topic("rssi"), String(network.rssi()), true);
+    publish(topic("uptime"), String(systemState.uptimeSeconds), true);
+    publish(topic("incubation/day"), String(systemState.incubation.incubationDay), true);
+    publish(topic("status"), network.connected() ? "online" : "offline", true);
 }
 
 void MQTTService::publishSensorStates()
 {
-    if (SensorManager::isSHT31Ready())
-    {
-        publish(MQTT_ROOT_TOPIC "/air_temperature", String(SensorManager::getAirTemperature(), 1), true);
-        publish(MQTT_ROOT_TOPIC "/air_humidity", String(SensorManager::getAirHumidity(), 1), true);
-    }
+    publish(topic("temperature/air"), String(systemState.sensor.airTemperature.value, 1), true);
+    publish(topic("temperature/egg"), String(systemState.sensor.eggTemperature.value, 1), true);
+    publish(topic("humidity/air"), String(systemState.sensor.airHumidity.value, 1), true);
+    publish(topic("door/state"), systemState.sensor.doorOpen ? "OPEN" : "CLOSED", true);
+    publish(topic("water_low/state"), systemState.sensor.waterLow ? "ON" : "OFF", true);
+}
 
-    if (SensorManager::isDS18B20Ready())
-    {
-        publish(MQTT_ROOT_TOPIC "/egg_temperature", String(SensorManager::getEggTemperature(), 1), true);
-    }
+void MQTTService::publishFaults()
+{
+    publish(topic("fault/state"), activeFaultSummary(), true);
+    publish(topic("alarm/state"), hasCriticalFault() ? "ON" : "OFF", true);
 }
 
 void MQTTService::publishAll()
@@ -295,57 +254,118 @@ void MQTTService::publishAll()
     publishDiagnostics();
     publishRelayStates();
     publishSensorStates();
+    publishFaults();
 }
 
-void MQTTService::callback(char *topic, byte *payload, unsigned int length)
+void MQTTService::callback(char *topicRaw, byte *payload, unsigned int length)
 {
-    String cmdTopic(topic);
+    String cmdTopic(topicRaw);
     String message;
     message.reserve(length);
 
-    for (unsigned int i = 0; i < length; i++) message += (char)payload[i];
+    for (unsigned int i = 0; i < length; i++) message += static_cast<char>(payload[i]);
     message.trim();
-    message.toUpperCase();
 
-    const bool state = (message == "ON");
+    String upper = message;
+    upper.toUpperCase();
 
-    Serial.print("[MQTT] RX ");
-    Serial.print(cmdTopic);
-    Serial.print(" = ");
-    Serial.println(message);
+    bool onOffValue = false;
 
-    if (cmdTopic.endsWith("/heater/set")) RelayController::heater(state);
-    else if (cmdTopic.endsWith("/humidifier/set")) RelayController::humidifier(state);
-    else if (cmdTopic.endsWith("/fan/set")) RelayController::fan(state);
-    else if (cmdTopic.endsWith("/vent/set")) RelayController::ventilation(state);
-    else if (cmdTopic.endsWith("/turner/set"))
+    if (cmdTopic.endsWith("/mode/set"))
     {
-        if (state) EggTurnerManager::enable();
-        else EggTurnerManager::disable();
+        if (upper == "OFF") applyMode(SystemMode::OFF);
+        else if (upper == "MANUAL") applyMode(SystemMode::MANUAL);
+        else if (upper == "AUTO") applyMode(SystemMode::AUTO);
+        else if (upper == "ALARM") applyMode(SystemMode::ALARM);
+    }
+    else if (cmdTopic.endsWith("/start/set"))
+    {
+        if (parseOnOff(upper, onOffValue))
+        {
+            systemState.incubation.incubationRunning = onOffValue;
+            if (!onOffValue)
+            {
+                applyMode(SystemMode::OFF);
+            }
+            else if (systemState.mode == SystemMode::OFF)
+            {
+                applyMode(SystemMode::AUTO);
+            }
+        }
+    }
+    else if (cmdTopic.endsWith("/target/temperature/set"))
+    {
+        const float value = message.toFloat();
+        if (value >= 34.0f && value <= 39.5f)
+        {
+            systemState.incubation.targetTemperature = value;
+            TemperatureManager::setTargetTemperature(value);
+        }
+    }
+    else if (cmdTopic.endsWith("/target/humidity/set"))
+    {
+        const float value = message.toFloat();
+        if (value >= 30.0f && value <= 85.0f)
+        {
+            systemState.incubation.targetHumidity = value;
+            HumidityManager::setTargetHumidity(value);
+        }
     }
     else if (cmdTopic.endsWith("/profile/set"))
     {
-        if (IncubationProfile::setProfileByCode(message, millis()))
+        if (IncubationProfile::setProfileByCode(upper, 0))
         {
-            Serial.print("[MQTT] Profile changed to: ");
-            Serial.println(IncubationProfile::currentCode());
-
-            mqtt.publish(MQTT_ROOT_TOPIC "/profile/state", IncubationProfile::currentCode(), true);
-            mqtt.publish(MQTT_ROOT_TOPIC "/incubation_day", String(IncubationProfile::currentDay(millis())), true);
-            mqtt.publish(MQTT_ROOT_TOPIC "/stage", IncubationProfile::isLockdown(millis()) ? "LOCKDOWN" : "INCUBATION", true);
-        }
-        else
-        {
-            Serial.print("[MQTT] Invalid profile: ");
-            Serial.println(message);
+            systemState.incubation.profileCode = upper;
         }
     }
-    else
+    else if (cmdTopic.endsWith("/relay/heater/set"))
     {
-        Serial.print("[MQTT] Unknown topic: ");
-        Serial.println(cmdTopic);
-        return;
+        if (systemState.mode == SystemMode::MANUAL && !hasCriticalFault() && parseOnOff(upper, onOffValue))
+        {
+            RelayController::heater(onOffValue);
+        }
+    }
+    else if (cmdTopic.endsWith("/relay/humidifier/set"))
+    {
+        if (systemState.mode == SystemMode::MANUAL && !hasCriticalFault() && parseOnOff(upper, onOffValue))
+        {
+            RelayController::humidifier(onOffValue);
+        }
+    }
+    else if (cmdTopic.endsWith("/relay/fan/set"))
+    {
+        if (systemState.mode == SystemMode::MANUAL && parseOnOff(upper, onOffValue))
+        {
+            RelayController::fan(onOffValue);
+        }
+    }
+    else if (cmdTopic.endsWith("/relay/vent/set"))
+    {
+        if (systemState.mode == SystemMode::MANUAL && parseOnOff(upper, onOffValue))
+        {
+            RelayController::ventilation(onOffValue);
+        }
+    }
+    else if (cmdTopic.endsWith("/turner/set"))
+    {
+        if (parseOnOff(upper, onOffValue))
+        {
+            if (!SensorManager::isDoorOpen() && !hasFault(FAULT_TURN_TIMEOUT))
+            {
+                if (onOffValue) EggTurnerManager::enable();
+                else EggTurnerManager::disable();
+            }
+        }
+    }
+    else if (cmdTopic.endsWith("/turner/command"))
+    {
+        if (!SensorManager::isDoorOpen() && !hasCriticalFault())
+        {
+            if (upper == "MOVE_HOME") EggTurnerManager::requestMoveHome();
+            else if (upper == "MOVE_END") EggTurnerManager::requestMoveEnd();
+            else if (upper == "STEP") EggTurnerManager::manualTurn();
+        }
     }
 
-    mqtt.publishRelayStates();
+    mqtt.publishAll();
 }

@@ -1,6 +1,9 @@
 #include <Arduino.h>
-#include <math.h>
+#include <Preferences.h>
+#include <esp_task_wdt.h>
+
 #include "logger.h"
+#include "sensor_manager.h"
 #include "managers/temperature_manager.h"
 #include "managers/humidity_manager.h"
 #include "managers/egg_turner_manager.h"
@@ -8,174 +11,268 @@
 #include "network_service.h"
 #include "mqtt_service.h"
 #include "incubation_profile.h"
+#include "system_state.h"
 
 extern NetworkService network;
 extern MQTTService mqtt;
 
-uint32_t lastUpdateTime = 0;
-uint32_t updateInterval = 1000;
-
-void printSystemStatus();
-void applyProfileControl();
-
-void setup()
+namespace
 {
-    Serial.begin(115200);
-    delay(1000);
+Preferences prefs;
+uint32_t lastControlMs = 0;
+uint32_t lastStatusMs = 0;
+uint32_t lastPersistMs = 0;
+uint32_t bootMillis = 0;
+uint32_t incubationElapsedAtBoot = 0;
 
-    Serial.println("[BOOT] setup entered");
+constexpr uint32_t CONTROL_INTERVAL_MS = 1000;
+constexpr uint32_t STATUS_INTERVAL_MS = 15000;
+constexpr uint32_t PERSIST_INTERVAL_MS = 30000;
 
-    Logger::begin(115200);
-    Serial.println("[BOOT] logger started");
+void persistState()
+{
+    if (!prefs.begin("incubator", false))
+    {
+        return;
+    }
 
-    Serial.println("[BOOT] network.begin()");
-    network.begin();
-
-    Serial.println("[BOOT] mqtt.begin()");
-    mqtt.begin();
-
-    RelayController::begin();
-    TemperatureManager::begin();
-    HumidityManager::begin();
-    EggTurnerManager::begin();
-
-    // Default profile: CHICKEN
-    IncubationProfile::begin(IncubationProfileType::CHICKEN, millis());
-
-    // Apply one-time initial profile values
-    applyProfileControl();
-
-    lastUpdateTime = millis();
-    Serial.println("[BOOT] Initialization done.");
+    prefs.putUChar("mode", static_cast<uint8_t>(systemState.mode));
+    prefs.putBool("running", systemState.incubation.incubationRunning);
+    prefs.putBool("turning", systemState.incubation.turningEnabled);
+    prefs.putFloat("tgt_t", systemState.incubation.targetTemperature);
+    prefs.putFloat("tgt_h", systemState.incubation.targetHumidity);
+    prefs.putFloat("ovrt", systemState.incubation.overTemperatureLimit);
+    prefs.putULong("start", systemState.incubation.incubationStartEpoch);
+    prefs.putULong("elapsed", incubationElapsedAtBoot + ((millis() - bootMillis) / 1000UL));
+    prefs.putString("profile", systemState.incubation.profileCode);
+    prefs.end();
 }
 
-void loop()
+void restoreState()
 {
-    static uint32_t heartbeat = 0;
-    if (millis() - heartbeat > 5000)
+    if (!prefs.begin("incubator", true))
     {
-        heartbeat = millis();
-        Serial.println("[LOOP] network.loop() + mqtt.loop()");
+        return;
     }
 
-    network.loop();
-    mqtt.loop();
+    systemState.mode = static_cast<SystemMode>(prefs.getUChar("mode", static_cast<uint8_t>(SystemMode::OFF)));
+    systemState.incubation.incubationRunning = prefs.getBool("running", false);
+    systemState.incubation.turningEnabled = prefs.getBool("turning", true);
+    systemState.incubation.targetTemperature = prefs.getFloat("tgt_t", 37.5f);
+    systemState.incubation.targetHumidity = prefs.getFloat("tgt_h", 60.0f);
+    systemState.incubation.overTemperatureLimit = prefs.getFloat("ovrt", 38.5f);
+    systemState.incubation.incubationStartEpoch = prefs.getULong("start", 0);
+    incubationElapsedAtBoot = prefs.getULong("elapsed", 0);
+    systemState.incubation.profileCode = prefs.getString("profile", "CHICKEN");
 
-    uint32_t now = millis();
-    if (now - lastUpdateTime >= updateInterval)
+    prefs.end();
+
+    IncubationProfile::setProfileByCode(systemState.incubation.profileCode, 0);
+}
+
+uint16_t getIncubationDay()
+{
+    if (!systemState.incubation.incubationRunning)
     {
-        lastUpdateTime = now;
-
-        // Apply day/stage policy periodically
-        applyProfileControl();
-
-        TemperatureManager::update();
-        HumidityManager::update();
-        EggTurnerManager::update();
-
-        static uint32_t statusCounter = 0;
-        statusCounter++;
-        if (statusCounter >= 10)
-        {
-            statusCounter = 0;
-            printSystemStatus();
-        }
+        return 0;
     }
 
-    delay(10);
+    const uint32_t elapsed = incubationElapsedAtBoot + ((millis() - bootMillis) / 1000UL);
+    return static_cast<uint16_t>((elapsed / 86400UL) + 1);
+}
+
+void setMode(SystemMode mode)
+{
+    if (mode == systemState.mode)
+    {
+        return;
+    }
+
+    systemState.mode = mode;
+
+    if (mode == SystemMode::OFF || mode == SystemMode::ALARM)
+    {
+        TemperatureManager::disable();
+        HumidityManager::disable();
+        EggTurnerManager::disable();
+        RelayController::allOff();
+    }
+    else if (mode == SystemMode::AUTO)
+    {
+        TemperatureManager::enable();
+        HumidityManager::enable();
+        if (systemState.incubation.turningEnabled) EggTurnerManager::enable();
+    }
 }
 
 void applyProfileControl()
 {
-    uint32_t now = millis();
-    const auto& p = IncubationProfile::current();
-    const uint16_t day = IncubationProfile::currentDay(now);
-    const bool lockdown = IncubationProfile::isLockdown(now);
+    const auto &p = IncubationProfile::current();
+    const uint16_t day = getIncubationDay();
+    const bool lockdown = day >= p.lockdownDay;
 
-    const float targetTemp = p.tempSetpointC;
-    const float targetHum  = lockdown ? p.humidityLockdown : p.humidityIncubation;
+    systemState.incubation.incubationDay = day;
 
-    // Only set when changed -> avoid INFO spam every second
-    if (fabs(TemperatureManager::getTargetTemperature() - targetTemp) > 0.01f)
+    TemperatureManager::setTargetTemperature(systemState.incubation.targetTemperature);
+    HumidityManager::setTargetHumidity(lockdown ? p.humidityLockdown : systemState.incubation.targetHumidity);
+
+    EggTurnerManager::setTurningInterval(p.turnIntervalMin);
+    EggTurnerManager::setTurnDuration(p.turnDurationSec);
+
+    if (lockdown)
     {
-        TemperatureManager::setTargetTemperature(targetTemp);
-    }
-
-    if (fabs(HumidityManager::getTargetHumidity() - targetHum) > 0.01f)
-    {
-        HumidityManager::setTargetHumidity(targetHum);
-    }
-
-    if (EggTurnerManager::getTurningInterval() != p.turnIntervalMin)
-    {
-        EggTurnerManager::setTurningInterval(p.turnIntervalMin);
-    }
-
-    if (EggTurnerManager::getTurnDuration() != p.turnDurationSec)
-    {
-        EggTurnerManager::setTurnDuration(p.turnDurationSec);
-    }
-
-    // Critical rule: in LOCKDOWN always force turner OFF
-    if (lockdown && EggTurnerManager::isEnabled())
-    {
+        systemState.incubation.turningEnabled = false;
         EggTurnerManager::disable();
-        Serial.println("[PROFILE] Lockdown active -> Turner DISABLED");
     }
-
-    // NOTE:
-    // We intentionally DO NOT auto-enable turner in INCUBATION anymore.
-    // This preserves user manual OFF command from Home Assistant.
-
-    static uint32_t lastPrint = 0;
-    if (millis() - lastPrint > 15000)
+    else if (systemState.mode == SystemMode::AUTO && systemState.incubation.turningEnabled)
     {
-        lastPrint = millis();
-        Serial.print("[PROFILE] ");
-        Serial.print(p.name);
-        Serial.print(" day ");
-        Serial.print(day);
-        Serial.print("/");
-        Serial.print(p.totalDays);
-        Serial.print(" stage=");
-        Serial.println(lockdown ? "LOCKDOWN" : "INCUBATION");
+        EggTurnerManager::enable();
+    }
+}
+
+void applySafetyPolicy()
+{
+    if (hasCriticalFault())
+    {
+        setMode(SystemMode::ALARM);
+        RelayController::buzzer(true);
+    }
+    else
+    {
+        RelayController::buzzer(false);
+        if (systemState.mode == SystemMode::ALARM)
+        {
+            setMode(SystemMode::OFF);
+        }
     }
 }
 
 void printSystemStatus()
 {
-    uint32_t now = millis();
-    const auto& p = IncubationProfile::current();
-
-    Serial.println("===== System Status =====");
-    Serial.print("Profile: ");
-    Serial.println(p.name);
+    Serial.println("===== Incubator Status =====");
+    Serial.print("Mode: ");
+    Serial.println(modeToString(systemState.mode));
 
     Serial.print("Day: ");
-    Serial.print(IncubationProfile::currentDay(now));
+    Serial.print(systemState.incubation.incubationDay);
+    Serial.print(" Profile: ");
+    Serial.println(systemState.incubation.profileCode);
+
+    Serial.print("Air Temp: ");
+    Serial.print(systemState.sensor.airTemperature.value, 1);
+    Serial.print("C (valid=");
+    Serial.print(systemState.sensor.airTemperature.valid ? "Y" : "N");
+    Serial.print(") Egg Temp: ");
+    Serial.print(systemState.sensor.eggTemperature.value, 1);
+    Serial.println("C");
+
+    Serial.print("RH: ");
+    Serial.print(systemState.sensor.airHumidity.value, 1);
+    Serial.print("% Target T/H: ");
+    Serial.print(systemState.incubation.targetTemperature, 1);
     Serial.print("/");
-    Serial.println(p.totalDays);
+    Serial.println(systemState.incubation.targetHumidity, 1);
 
-    Serial.print("Stage: ");
-    Serial.println(IncubationProfile::isLockdown(now) ? "LOCKDOWN" : "INCUBATION");
+    Serial.print("Relay H/H/F/V: ");
+    Serial.print(systemState.output.heater);
+    Serial.print("/");
+    Serial.print(systemState.output.humidifier);
+    Serial.print("/");
+    Serial.print(systemState.output.circulationFan);
+    Serial.print("/");
+    Serial.println(systemState.output.ventilationFan);
 
-    Serial.print("Temperature: ");
-    Serial.print(TemperatureManager::getCurrentTemperature(), 1);
-    Serial.print(" C (Target: ");
-    Serial.print(TemperatureManager::getTargetTemperature(), 1);
-    Serial.println(" C)");
+    Serial.print("Turner: ");
+    Serial.print(EggTurnerManager::getStateName());
+    Serial.print(" door=");
+    Serial.println(systemState.sensor.doorOpen ? "OPEN" : "CLOSED");
 
-    Serial.print("Humidity: ");
-    Serial.print(HumidityManager::getCurrentHumidity(), 1);
-    Serial.print("% (Target: ");
-    Serial.print(HumidityManager::getTargetHumidity(), 1);
-    Serial.println("%)");
+    Serial.print("WiFi/MQTT: ");
+    Serial.print(systemState.connection.wifi ? "UP" : "DOWN");
+    Serial.print("/");
+    Serial.println(systemState.connection.mqtt ? "UP" : "DOWN");
 
-    Serial.print("Turner enabled: ");
-    Serial.println(EggTurnerManager::isEnabled() ? "YES" : "NO");
+    Serial.print("Faults: ");
+    Serial.println(activeFaultSummary());
+    Serial.println("===========================");
+}
+}
 
-    Serial.print("Turn count: ");
-    Serial.println(EggTurnerManager::getTurnCount());
+void setup()
+{
+    Logger::begin(115200);
 
-    Serial.println("=========================");
+    bootMillis = millis();
+
+    RelayController::begin();
+    SensorManager::begin();
+    TemperatureManager::begin();
+    HumidityManager::begin();
+    EggTurnerManager::begin();
+
+    restoreState();
+
+    IncubationProfile::setProfileByCode(systemState.incubation.profileCode, 0);
+
+    network.begin();
+    mqtt.begin();
+
+    esp_task_wdt_init(15, true);
+    esp_task_wdt_add(NULL);
+
+    setMode(systemState.mode);
+    applyProfileControl();
+}
+
+void loop()
+{
+    esp_task_wdt_reset();
+
+    network.loop();
+    mqtt.loop();
+
+    systemState.connection.wifi = network.connected();
+    systemState.connection.mqtt = mqtt.connected();
+    systemState.connection.rssi = network.rssi();
+    systemState.uptimeSeconds = millis() / 1000UL;
+
+    setFault(WARN_MQTT_OFFLINE, !mqtt.connected(), "MQTT disconnected");
+
+    const uint32_t now = millis();
+    if (now - lastControlMs >= CONTROL_INTERVAL_MS)
+    {
+        lastControlMs = now;
+
+        SensorManager::update();
+        systemState.incubation.incubationDay = getIncubationDay();
+        applyProfileControl();
+        applySafetyPolicy();
+
+        if (systemState.mode == SystemMode::AUTO && systemState.incubation.incubationRunning && !hasCriticalFault())
+        {
+            TemperatureManager::enable();
+            HumidityManager::enable();
+            TemperatureManager::update();
+            HumidityManager::update();
+            EggTurnerManager::update();
+        }
+        else
+        {
+            TemperatureManager::disable();
+            HumidityManager::disable();
+            EggTurnerManager::disable();
+        }
+    }
+
+    if (now - lastStatusMs >= STATUS_INTERVAL_MS)
+    {
+        lastStatusMs = now;
+        printSystemStatus();
+    }
+
+    if (now - lastPersistMs >= PERSIST_INTERVAL_MS)
+    {
+        lastPersistMs = now;
+        persistState();
+    }
 }

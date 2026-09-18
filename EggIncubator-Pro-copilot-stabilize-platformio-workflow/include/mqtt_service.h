@@ -21,6 +21,7 @@ public:
     void publishRelayStates();
     void publishDiagnostics();
     void publishSensorStates();
+    void publishFaults();
     void publishAll();
 
 private:
