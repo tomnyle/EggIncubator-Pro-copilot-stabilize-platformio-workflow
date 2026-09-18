@@ -1,0 +1,31 @@
+name: PlatformIO CI
+
+on:
+  pull_request:
+  push:
+    branches: ["main", "master", "copilot/**"]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: EggIncubator-Pro-copilot-stabilize-platformio-workflow
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Build firmware
+        run: pio run -e esp32_upesy
+
+      - name: Run pure C++ safety tests
+        run: |
+          g++ -std=c++17 -Iinclude test/test_safety_logic/test_main.cpp -o /tmp/safety_tests
+          /tmp/safety_tests

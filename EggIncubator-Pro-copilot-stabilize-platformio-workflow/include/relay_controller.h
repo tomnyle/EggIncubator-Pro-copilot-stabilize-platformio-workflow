@@ -12,6 +12,8 @@ public:
     static void humidifier(bool state);
     static void fan(bool state);
     static void ventilation(bool state);
+    static void buzzer(bool state);
+    static void motor(bool enable, bool left, bool right);
 
     // Output Toggle
     static void toggleHeater();
@@ -21,6 +23,10 @@ public:
 
     // Output OFF
     static void allOff();
+    static bool heaterState();
+    static bool humidifierState();
+    static bool fanState();
+    static bool ventilationState();
 
 private:
 

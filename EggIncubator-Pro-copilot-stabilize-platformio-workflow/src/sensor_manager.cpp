@@ -1,16 +1,13 @@
 #include "sensor_manager.h"
+
+#include <math.h>
+#include <Wire.h>
 #include "pins.h"
 #include "logger.h"
 #include "system_state.h"
 
-/******************************************************
- * Static Variable Initialization
- ******************************************************/
-
 Adafruit_SHT31 SensorManager::sht31;
-
-OneWire SensorManager::oneWire(PIN_I2C_SDA);  // OneWire on same pin for now
-
+OneWire SensorManager::oneWire(PIN_DS18B20);
 DallasTemperature SensorManager::ds18b20(&SensorManager::oneWire);
 
 float SensorManager::airTemp = 0.0f;
@@ -23,176 +20,133 @@ bool SensorManager::ds18b20Ready = false;
 unsigned long SensorManager::lastSHT31Update = 0;
 unsigned long SensorManager::lastDS18B20Update = 0;
 
-const uint32_t SensorManager::SHT31_UPDATE_INTERVAL = 2000;    // 2 seconds
-const uint32_t SensorManager::DS18B20_UPDATE_INTERVAL = 3000;  // 3 seconds
-
-/******************************************************
- * Begin - Initialize both sensors
- ******************************************************/
+const uint32_t SensorManager::SHT31_UPDATE_INTERVAL = 2000;
+const uint32_t SensorManager::DS18B20_UPDATE_INTERVAL = 3000;
+const uint32_t SensorManager::SENSOR_STALE_MS = 15000;
 
 void SensorManager::begin()
 {
-    Logger::info("--------------------------------");
-    Logger::info("Initializing Sensor Manager");
-    Logger::info("--------------------------------");
+    Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
 
-    // Initialize SHT31 (Temperature & Humidity)
-    if (sht31.begin(0x44))  // 0x44 is default I2C address for SHT31
-    {
-        sht31Ready = true;
-        Logger::info("✓ SHT31 Initialized");
-    }
-    else
-    {
-        sht31Ready = false;
-        Logger::error("✗ SHT31 NOT FOUND");
-    }
+    pinMode(PIN_DOOR_SWITCH, INPUT_PULLUP);
+    pinMode(PIN_WATER_LOW_SWITCH, INPUT_PULLUP);
 
-    // Initialize DS18B20 (Egg Temperature)
+    sht31Ready = sht31.begin(0x44);
+    setFault(FAULT_SHT31_FAIL, !sht31Ready, "SHT31 init failed");
+
     ds18b20.begin();
-    
-    if (ds18b20.getDS18Count() > 0)
+    ds18b20Ready = ds18b20.getDS18Count() > 0;
+    if (ds18b20Ready)
     {
-        ds18b20Ready = true;
-        ds18b20.setResolution(12);  // 12-bit resolution
-        Logger::info("✓ DS18B20 Initialized");
+        ds18b20.setResolution(12);
     }
-    else
-    {
-        ds18b20Ready = false;
-        Logger::error("✗ DS18B20 NOT FOUND");
-    }
+    setFault(FAULT_DS18B20_FAIL, !ds18b20Ready, "DS18B20 init failed");
 
-    Logger::info("--------------------------------");
+    Logger::info(sht31Ready ? "SHT31 ready" : "SHT31 not ready");
+    Logger::info(ds18b20Ready ? "DS18B20 ready" : "DS18B20 not ready");
 }
-
-/******************************************************
- * Update - Read both sensors with timing
- ******************************************************/
 
 void SensorManager::update()
 {
-    uint32_t now = millis();
+    const uint32_t now = millis();
 
-    // Update SHT31
     if (sht31Ready && (now - lastSHT31Update >= SHT31_UPDATE_INTERVAL))
     {
         lastSHT31Update = now;
         updateSHT31();
     }
 
-    // Update DS18B20
     if (ds18b20Ready && (now - lastDS18B20Update >= DS18B20_UPDATE_INTERVAL))
     {
         lastDS18B20Update = now;
         updateDS18B20();
     }
 
-    // Update system state
-    systemState.sensor.airTemperature = airTemp;
-    systemState.sensor.airHumidity = airHumidity;
-    systemState.sensor.eggTemperature = eggTemp;
-}
+    systemState.sensor.airTemperature.stale = (now - systemState.sensor.airTemperature.lastUpdateMs) > SENSOR_STALE_MS;
+    systemState.sensor.airHumidity.stale = (now - systemState.sensor.airHumidity.lastUpdateMs) > SENSOR_STALE_MS;
+    systemState.sensor.eggTemperature.stale = (now - systemState.sensor.eggTemperature.lastUpdateMs) > SENSOR_STALE_MS;
 
-/******************************************************
- * Update SHT31 - Read temperature and humidity
- ******************************************************/
+    systemState.sensor.doorOpen = (digitalRead(PIN_DOOR_SWITCH) == INPUT_ACTIVE);
+    systemState.sensor.waterLow = (digitalRead(PIN_WATER_LOW_SWITCH) == INPUT_ACTIVE);
+
+    setFault(FAULT_DOOR_OPEN, systemState.sensor.doorOpen, "Door open");
+    setFault(FAULT_WATER_LOW, systemState.sensor.waterLow, "Water low");
+
+    const bool tempCompareValid = isAirTemperatureValid() && isEggTemperatureValid();
+    const float delta = tempCompareValid ? fabsf(systemState.sensor.airTemperature.value - systemState.sensor.eggTemperature.value) : 0.0f;
+
+    systemState.sensor.tempDisagreement = tempCompareValid && (delta > systemState.incubation.maxTempDisagreementC);
+    setFault(FAULT_TEMP_DISAGREE, systemState.sensor.tempDisagreement, "SHT31/DS18B20 disagreement");
+
+    setFault(FAULT_SHT31_FAIL, !(isAirTemperatureValid() && isHumidityValid()), "SHT31 invalid or stale");
+    setFault(FAULT_DS18B20_FAIL, !isEggTemperatureValid(), "DS18B20 invalid or stale");
+    setFault(FAULT_HUMIDITY_FAIL, !isHumidityValid(), "Humidity invalid or stale");
+}
 
 void SensorManager::updateSHT31()
 {
-    float temp = sht31.readTemperature();
-    float humidity = sht31.readHumidity();
+    const float temp = sht31.readTemperature();
+    const float humidity = sht31.readHumidity();
 
-    // Check for valid readings
-    if (!isnan(temp) && !isnan(humidity))
+    if (!isnan(temp) && !isnan(humidity) && temp > -10.0f && temp < 70.0f && humidity >= 0.0f && humidity <= 100.0f)
     {
         airTemp = temp;
         airHumidity = humidity;
 
-        Logger::debug(
-            ("SHT31: T=" + String(temp, 1) + "°C, H=" + String(humidity, 1) + "%").c_str());
+        systemState.sensor.airTemperature.value = temp;
+        systemState.sensor.airTemperature.valid = true;
+        systemState.sensor.airTemperature.lastUpdateMs = millis();
+
+        systemState.sensor.airHumidity.value = humidity;
+        systemState.sensor.airHumidity.valid = true;
+        systemState.sensor.airHumidity.lastUpdateMs = millis();
     }
     else
     {
-        Logger::warning("SHT31: Invalid reading");
+        systemState.sensor.airTemperature.valid = false;
+        systemState.sensor.airHumidity.valid = false;
     }
 }
-
-/******************************************************
- * Update DS18B20 - Read egg temperature
- ******************************************************/
 
 void SensorManager::updateDS18B20()
 {
     ds18b20.requestTemperatures();
+    const float temp = ds18b20.getTempCByIndex(0);
 
-    // Get temperature from first sensor
-    float temp = ds18b20.getTempCByIndex(0);
-
-    // DS18B20 returns -127 on error
-    if (temp > -127.0f && temp < 85.0f)
+    if (temp > -40.0f && temp < 90.0f && temp != DEVICE_DISCONNECTED_C)
     {
         eggTemp = temp;
-
-        Logger::debug(
-            ("DS18B20: T=" + String(temp, 1) + "°C").c_str());
+        systemState.sensor.eggTemperature.value = temp;
+        systemState.sensor.eggTemperature.valid = true;
+        systemState.sensor.eggTemperature.lastUpdateMs = millis();
     }
     else
     {
-        Logger::warning("DS18B20: Invalid reading");
+        systemState.sensor.eggTemperature.valid = false;
     }
 }
 
-/******************************************************
- * Get Air Temperature
- ******************************************************/
+float SensorManager::getAirTemperature() { return airTemp; }
+float SensorManager::getAirHumidity() { return airHumidity; }
+float SensorManager::getEggTemperature() { return eggTemp; }
 
-float SensorManager::getAirTemperature()
+bool SensorManager::isSHT31Ready() { return sht31Ready; }
+bool SensorManager::isDS18B20Ready() { return ds18b20Ready; }
+
+bool SensorManager::isAirTemperatureValid()
 {
-    return airTemp;
+    return systemState.sensor.airTemperature.valid && !systemState.sensor.airTemperature.stale;
 }
 
-/******************************************************
- * Get Air Humidity
- ******************************************************/
-
-float SensorManager::getAirHumidity()
+bool SensorManager::isHumidityValid()
 {
-    return airHumidity;
+    return systemState.sensor.airHumidity.valid && !systemState.sensor.airHumidity.stale;
 }
 
-/******************************************************
- * Get Egg Temperature
- ******************************************************/
-
-float SensorManager::getEggTemperature()
+bool SensorManager::isEggTemperatureValid()
 {
-    return eggTemp;
+    return systemState.sensor.eggTemperature.valid && !systemState.sensor.eggTemperature.stale;
 }
 
-/******************************************************
- * Check SHT31 Ready
- ******************************************************/
-
-bool SensorManager::isSHT31Ready()
-{
-    return sht31Ready;
-}
-
-/******************************************************
- * Check DS18B20 Ready
- ******************************************************/
-
-bool SensorManager::isDS18B20Ready()
-{
-    return ds18b20Ready;
-}
-
-/******************************************************
- * Check All Sensors Ready
- ******************************************************/
-
-bool SensorManager::allReady()
-{
-    return sht31Ready && ds18b20Ready;
-}
+bool SensorManager::isDoorOpen() { return systemState.sensor.doorOpen; }
+bool SensorManager::isWaterLow() { return systemState.sensor.waterLow; }

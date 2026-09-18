@@ -4,141 +4,102 @@
 #include "sensor_manager.h"
 #include "relay_controller.h"
 #include "logger.h"
-
-/******************************************************
- * Static Member Initialization
- ******************************************************/
+#include "system_state.h"
 
 float HumidityManager::targetHumidity = 60.0f;
 float HumidityManager::currentHumidity = 0.0f;
-
-float HumidityManager::humidityHysteresis = 5.0f;
+float HumidityManager::humidityHysteresis = 4.0f;
 
 bool HumidityManager::controlEnabled = false;
 bool HumidityManager::humidifierRunning = false;
+uint32_t HumidityManager::runStartMs = 0;
+uint32_t HumidityManager::cooldownUntilMs = 0;
+uint16_t HumidityManager::stableCounter = 0;
 
-float HumidityManager::maxErrorForStable = 2.0f;
-uint32_t HumidityManager::stableCounterThreshold = 60;  // ~60 seconds at 1Hz update
-uint32_t HumidityManager::stableCounter = 0;
-
-/******************************************************
- * Initialize Humidity Manager
- ******************************************************/
+const uint32_t HumidityManager::MAX_RUNTIME_MS = 120000;
+const uint32_t HumidityManager::REST_INTERVAL_MS = 45000;
 
 void HumidityManager::begin()
 {
-    Logger::info("--------------------------------");
-    Logger::info("Humidity Manager Started");
-    Logger::info("--------------------------------");
-
-    Logger::info(("Target Humidity: " + String(targetHumidity, 1) + "%").c_str());
-    Logger::info(("Hysteresis: ±" + String(humidityHysteresis, 1) + "%").c_str());
+    targetHumidity = systemState.incubation.targetHumidity;
+    controlEnabled = false;
+    humidifierRunning = false;
+    RelayController::humidifier(false);
 }
-
-/******************************************************
- * Update - Control humidity
- ******************************************************/
 
 void HumidityManager::update()
 {
-    if (!controlEnabled)
+    currentHumidity = SensorManager::getAirHumidity();
+    const uint32_t now = millis();
+
+    if (!controlEnabled || !SensorManager::isHumidityValid())
     {
+        setFault(FAULT_HUMIDITY_FAIL, true, "Humidity sensor invalid or stale");
+        RelayController::humidifier(false);
+        humidifierRunning = false;
         return;
     }
 
-    currentHumidity = SensorManager::getAirHumidity();
+    setFault(FAULT_HUMIDITY_FAIL, false);
 
-    if (currentHumidity < 0 || !SensorManager::isSHT31Ready())
+    if (humidifierRunning && (now - runStartMs) >= MAX_RUNTIME_MS)
     {
-        return;
+        RelayController::humidifier(false);
+        humidifierRunning = false;
+        cooldownUntilMs = now + REST_INTERVAL_MS;
     }
 
     const float error = targetHumidity - currentHumidity;
     applyHumidifierControl(error);
 
-    if (fabsf(error) < maxErrorForStable)
+    if (fabsf(error) <= humidityHysteresis)
     {
-        stableCounter++;
+        if (stableCounter < 1000) stableCounter++;
     }
     else
     {
         stableCounter = 0;
     }
-
-    static uint32_t updateCount = 0;
-    updateCount++;
-
-    if (updateCount % 10 == 0)
-    {
-        Logger::debug(
-            ("Humidity: " +
-             String(currentHumidity, 1) + "%, " +
-             "Target: " + String(targetHumidity, 1) + "%, " +
-             "Error: " + String(error, 1) + "%, " +
-             "Humidifier: " + String(humidifierRunning ? "ON" : "OFF")).c_str());
-    }
 }
-
-/******************************************************
- * Set Target Humidity
- ******************************************************/
 
 void HumidityManager::setTargetHumidity(float target)
 {
     targetHumidity = target;
-    stableCounter = 0;
-    Logger::info(("Humidity Target Set: " + String(target, 1) + "%").c_str());
+    systemState.incubation.targetHumidity = target;
 }
-
-/******************************************************
- * Getters / Setters
- ******************************************************/
 
 float HumidityManager::getCurrentHumidity() { return currentHumidity; }
 float HumidityManager::getTargetHumidity() { return targetHumidity; }
-float HumidityManager::getHumidityError() { return (targetHumidity - currentHumidity); }
+float HumidityManager::getHumidityError() { return targetHumidity - currentHumidity; }
 
 void HumidityManager::setHysteresis(float hysteresis)
 {
-    humidityHysteresis = hysteresis;
-    Logger::info(("Humidity Hysteresis Set: ±" + String(hysteresis, 1) + "%").c_str());
+    humidityHysteresis = (hysteresis < 1.0f) ? 1.0f : hysteresis;
 }
-
-/******************************************************
- * Enable / Disable
- ******************************************************/
 
 void HumidityManager::enable()
 {
-    if (!controlEnabled)
-    {
-        controlEnabled = true;
-        stableCounter = 0;
-        Logger::info("Humidity Control ENABLED");
-    }
+    controlEnabled = true;
+    runStartMs = 0;
+    cooldownUntilMs = 0;
 }
 
 void HumidityManager::disable()
 {
-    if (controlEnabled)
-    {
-        controlEnabled = false;
-        RelayController::humidifier(false);
-        humidifierRunning = false;
-        Logger::info("Humidity Control DISABLED");
-    }
+    controlEnabled = false;
+    RelayController::humidifier(false);
+    humidifierRunning = false;
+    runStartMs = 0;
+    cooldownUntilMs = 0;
 }
 
 bool HumidityManager::isEnabled() { return controlEnabled; }
-bool HumidityManager::isStable() { return (stableCounter >= stableCounterThreshold); }
+bool HumidityManager::isStable() { return stableCounter > 15; }
 bool HumidityManager::isHumidifierRunning() { return humidifierRunning; }
-
-/******************************************************
- * Apply Humidifier Control using Hysteresis
- ******************************************************/
 
 void HumidityManager::applyHumidifierControl(float error)
 {
+    const uint32_t now = millis();
     const float onThreshold = humidityHysteresis;
     const float offThreshold = -humidityHysteresis;
 
@@ -148,16 +109,21 @@ void HumidityManager::applyHumidifierControl(float error)
         {
             RelayController::humidifier(false);
             humidifierRunning = false;
-            Logger::info("Humidifier OFF (Upper threshold reached)");
+            cooldownUntilMs = now + REST_INTERVAL_MS;
         }
     }
     else
     {
+        if (now < cooldownUntilMs)
+        {
+            return;
+        }
+
         if (error > onThreshold)
         {
             RelayController::humidifier(true);
             humidifierRunning = true;
-            Logger::info("Humidifier ON (Lower threshold reached)");
+            runStartMs = now;
         }
     }
 }

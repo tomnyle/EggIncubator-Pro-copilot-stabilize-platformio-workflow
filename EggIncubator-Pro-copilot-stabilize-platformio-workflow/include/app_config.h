@@ -16,22 +16,27 @@
 
 
 // WiFi
-#define WIFI_SSID            "Le Danh"
-#define WIFI_PASSWORD        "123456789"
+#define WIFI_SSID            "CHANGE_ME_WIFI_SSID"
+#define WIFI_PASSWORD        "CHANGE_ME_WIFI_PASSWORD"
 
 
 // MQTT
-#define MQTT_HOST            "192.168.100.168"
+#define MQTT_HOST            "192.168.1.100"
 #define MQTT_PORT            1883
 
-#define MQTT_USERNAME        "homer"
-#define MQTT_PASSWORD        "Danh@@@1992"
+#define MQTT_USERNAME        "CHANGE_ME_MQTT_USERNAME"
+#define MQTT_PASSWORD        "CHANGE_ME_MQTT_PASSWORD"
 
 
 // MQTT Topic Root
-
 #define MQTT_ROOT_TOPIC      "eggincubator"
 
+// Optional local override (not tracked)
+#ifdef __has_include
+#if __has_include("app_config.local.h")
+#include "app_config.local.h"
+#endif
+#endif
 
 
 #endif
