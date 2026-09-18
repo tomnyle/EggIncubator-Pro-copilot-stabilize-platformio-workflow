@@ -5,6 +5,9 @@ on:
   push:
     branches: ["main", "master", "copilot/**"]
 
+permissions:
+  contents: read
+
 jobs:
   build-and-validate:
     runs-on: ubuntu-latest
@@ -53,8 +56,8 @@ jobs:
       - name: Run pure C++ safety tests
         run: |
           if [ -f test/test_safety_logic/test_main.cpp ]; then
-            g++ -std=c++17 -Iinclude test/test_safety_logic/test_main.cpp -o /tmp/safety_tests
-            /tmp/safety_tests
+            g++ -std=c++17 -Iinclude test/test_safety_logic/test_main.cpp -o "$RUNNER_TEMP/safety_tests"
+            "$RUNNER_TEMP/safety_tests"
           else
             echo "No pure C++ safety tests present on this branch."
           fi
