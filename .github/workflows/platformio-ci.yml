@@ -56,8 +56,7 @@ jobs:
       - name: Run pure C++ safety tests
         run: |
           if [ -f test/test_safety_logic/test_main.cpp ]; then
-            g++ -std=c++17 -Iinclude test/test_safety_logic/test_main.cpp -o "$RUNNER_TEMP/safety_tests"
-            "$RUNNER_TEMP/safety_tests"
+            pio test -e native
           else
             echo "No pure C++ safety tests present on this branch."
           fi
