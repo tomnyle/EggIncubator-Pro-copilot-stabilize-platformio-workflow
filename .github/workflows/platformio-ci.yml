@@ -1,0 +1,53 @@
+name: PlatformIO CI
+
+on:
+  pull_request:
+  push:
+    branches: ["main", "master", "copilot/**"]
+
+jobs:
+  build-and-validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: EggIncubator-Pro-copilot-stabilize-platformio-workflow
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Validate PlatformIO configuration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text = Path("platformio.ini").read_text(encoding="utf-8")
+          assert "[env:esp32dev]" in text, "Missing release environment"
+          assert "[env:esp32dev_debug]" in text, "Missing debug environment"
+          assert "-DDEBUG" not in text, "Forbidden -DDEBUG macro found"
+          assert "monitor_speed = 115200" in text, "Monitor speed must be 115200"
+          assert "esp32_exception_decoder" in text, "Debug decoder filter missing"
+          PY
+
+      - name: Build release firmware
+        run: pio run -e esp32dev
+
+      - name: Build debug firmware
+        run: pio run -e esp32dev_debug
+
+      - name: Verify debug ELF exists
+        run: test -f .pio/build/esp32dev_debug/firmware.elf
+
+      - name: Run pure C++ safety tests
+        run: |
+          if [ -f test/test_safety_logic/test_main.cpp ]; then
+            g++ -std=c++17 -Iinclude test/test_safety_logic/test_main.cpp -o /tmp/safety_tests
+            /tmp/safety_tests
+          else
+            echo "No pure C++ safety tests present on this branch."
+          fi

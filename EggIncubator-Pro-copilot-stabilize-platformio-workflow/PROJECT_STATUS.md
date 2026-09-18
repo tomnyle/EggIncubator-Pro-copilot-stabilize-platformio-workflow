@@ -222,13 +222,14 @@ main.cpp
 - [x] All required libraries in platformio.ini
 - [x] Proper board configuration (littlefs filesystem)
 - [x] Build flags configured
-- [x] Upload speed optimized (921600 baud)
+- [x] Upload speed optimized (460800 baud)
 
 ### Build Commands Working ✅
 ```bash
-✅ pio run                    # Build project
-✅ pio run --target upload    # Upload to ESP32
-✅ pio device monitor         # Serial monitoring
+✅ pio run -e esp32dev                                # Build release firmware
+✅ pio run -e esp32dev_debug                          # Build debug firmware
+✅ pio run -e esp32dev -t upload --upload-port COM5  # Upload release firmware
+✅ pio device monitor -e esp32dev --port COM5 --baud 115200
 ```
 
 ---

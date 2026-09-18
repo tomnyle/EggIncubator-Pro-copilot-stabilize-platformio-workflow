@@ -160,15 +160,19 @@ Edit `include/app_config.h`:
 
 ### 5. Build & Upload
 ```bash
-# In VS Code with PlatformIO
-# Press Ctrl+Alt+U to upload
-# Or use terminal:
-pio run --target upload
+# Release build
+pio run -e esp32dev
+
+# Debug build (includes ELF symbols for exception decoding)
+pio run -e esp32dev_debug
+
+# Upload release firmware to a detected/selected port
+pio run -e esp32dev -t upload --upload-port COM5
 ```
 
 ### 6. Monitor Serial Output
 ```bash
-pio device monitor --baud 115200
+pio device monitor -e esp32dev --port COM5 --baud 115200
 ```
 
 ---
@@ -212,6 +216,11 @@ struct TargetState {
 3. Device will attempt WiFi connection
 4. Once WiFi connected, MQTT connection will start
 5. Home Assistant discovery entities will be published
+
+### Release vs Debug workflows
+- Use `pio run -e esp32dev` for normal release builds.
+- Use `pio run -e esp32dev_debug` when you need `esp32_exception_decoder` to resolve an exception backtrace against the matching debug ELF.
+- Keep serial monitoring at **115200 baud** for both environments.
 
 ### Manual Control (Serial Monitor)
 Currently controlled via MQTT. Future versions may add serial commands.
