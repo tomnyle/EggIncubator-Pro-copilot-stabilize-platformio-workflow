@@ -2,9 +2,9 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "PIO: Build (esp32_upesy)",
+      "label": "PIO: Build (esp32dev)",
       "type": "shell",
-      "command": "python -m platformio run -e esp32_upesy",
+      "command": "python -m platformio run -e esp32dev",
       "group": {
         "kind": "build",
         "isDefault": true
@@ -12,31 +12,56 @@
       "problemMatcher": []
     },
     {
-      "label": "PIO: Clean (esp32_upesy)",
+      "label": "PIO: Build (esp32dev_debug)",
       "type": "shell",
-      "command": "python -m platformio run -e esp32_upesy -t clean",
+      "command": "python -m platformio run -e esp32dev_debug",
+      "problemMatcher": []
+    },
+    {
+      "label": "PIO: Clean (esp32dev)",
+      "type": "shell",
+      "command": "python -m platformio run -e esp32dev -t clean",
+      "problemMatcher": []
+    },
+    {
+      "label": "PIO: Clean (esp32dev_debug)",
+      "type": "shell",
+      "command": "python -m platformio run -e esp32dev_debug -t clean",
       "problemMatcher": []
     },
     {
       "label": "PIO: Upload (auto-detect port)",
       "type": "shell",
-      "command": "python -m platformio run -e esp32_upesy -t upload",
+      "command": "python -m platformio run -e esp32dev -t upload",
       "group": "none",
       "problemMatcher": []
     },
     {
-      "label": "PIO: Monitor (auto-detect port, 115200)",
+      "label": "PIO: Upload Debug (auto-detect port)",
       "type": "shell",
-      "command": "python -m platformio device monitor -e esp32_upesy",
+      "command": "python -m platformio run -e esp32dev_debug -t upload",
+      "problemMatcher": []
+    },
+    {
+      "label": "PIO: Monitor Release (auto-detect port, 115200)",
+      "type": "shell",
+      "command": "python -m platformio device monitor -e esp32dev",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "PIO: Monitor Debug (auto-detect port, 115200)",
+      "type": "shell",
+      "command": "python -m platformio device monitor -e esp32dev_debug",
       "isBackground": true,
       "problemMatcher": []
     },
     {
       "label": "PIO: Upload + Monitor (1-click)",
       "type": "shell",
-      "command": "python -m platformio run -e esp32_upesy -t upload && python -m platformio device monitor -e esp32_upesy",
+      "command": "python -m platformio run -e esp32dev -t upload && python -m platformio device monitor -e esp32dev",
       "windows": {
-        "command": "python -m platformio run -e esp32_upesy -t upload ; if ($?) { python -m platformio device monitor -e esp32_upesy }"
+        "command": "python -m platformio run -e esp32dev -t upload ; if ($?) { python -m platformio device monitor -e esp32dev }"
       },
       "options": {
         "shell": {
@@ -49,15 +74,15 @@
     {
       "label": "PIO: Erase Flash (auto-detect port)",
       "type": "shell",
-      "command": "python -m platformio run -e esp32_upesy -t erase",
+      "command": "python -m platformio run -e esp32dev -t erase",
       "problemMatcher": []
     },
     {
       "label": "PIO: Erase + Upload + Monitor (full recovery)",
       "type": "shell",
-      "command": "python -m platformio run -e esp32_upesy -t erase && python -m platformio run -e esp32_upesy -t upload && python -m platformio device monitor -e esp32_upesy",
+      "command": "python -m platformio run -e esp32dev -t erase && python -m platformio run -e esp32dev -t upload && python -m platformio device monitor -e esp32dev",
       "windows": {
-        "command": "python -m platformio run -e esp32_upesy -t erase ; if ($?) { python -m platformio run -e esp32_upesy -t upload } ; if ($?) { python -m platformio device monitor -e esp32_upesy }"
+        "command": "python -m platformio run -e esp32dev -t erase ; if ($?) { python -m platformio run -e esp32dev -t upload } ; if ($?) { python -m platformio device monitor -e esp32dev }"
       },
       "options": {
         "shell": {

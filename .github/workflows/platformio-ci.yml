@@ -1,0 +1,58 @@
+name: PlatformIO CI
+
+on:
+  pull_request:
+  push:
+    branches: ["main", "master"]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: EggIncubator-Pro-copilot-stabilize-platformio-workflow
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Validate PlatformIO configuration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text = Path("platformio.ini").read_text(encoding="utf-8")
+          assert "[env:esp32dev]" in text, "Missing release environment"
+          assert "[env:esp32dev_debug]" in text, "Missing debug environment"
+          release = text.split("[env:esp32dev]", 1)[1].split("[env:esp32dev_debug]", 1)[0]
+          debug = text.split("[env:esp32dev_debug]", 1)[1]
+          assert "platform = espressif32@7.0.1" in text, "Unexpected platform version"
+          assert "board = esp32dev" in text, "Unexpected board"
+          assert "upload_protocol = esptool" in text, "Upload protocol must be esptool"
+          assert "upload_speed = 460800" in text, "Upload speed must be 460800"
+          assert "monitor_speed = 115200" in text, "Monitor speed must be 115200"
+          assert "-DDEBUG" not in release, "Forbidden -DDEBUG macro found in release environment"
+          assert "-DDEBUG" not in debug, "Forbidden -DDEBUG macro found in debug environment"
+          assert "esp32_exception_decoder" not in release, "Release monitor must not use the exception decoder"
+          assert "esp32_exception_decoder" in debug, "Debug decoder filter missing"
+          PY
+
+      - name: Build release firmware
+        run: pio run -e esp32dev
+
+      - name: Build debug firmware
+        run: pio run -e esp32dev_debug
+
+      - name: Verify debug ELF exists
+        run: find .pio/build/esp32dev_debug -maxdepth 1 -type f -name '*.elf' | grep -q .
+
+      - name: Run pure C++ safety tests
+        run: pio test -e native
