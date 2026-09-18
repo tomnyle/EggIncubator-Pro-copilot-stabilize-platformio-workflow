@@ -55,7 +55,7 @@ jobs:
 
       - name: Run pure C++ safety tests
         run: |
-          if [ -f test/test_safety_logic/test_main.cpp ]; then
+          if find test -type f \( -name '*.c' -o -name '*.cc' -o -name '*.cpp' -o -name '*.cxx' \) | grep -q .; then
             pio test -e native
           else
             echo "No pure C++ safety tests present on this branch."
