@@ -38,6 +38,7 @@ void EggTurnerManager::update()
 
     const bool atHome = (digitalRead(PIN_LIMIT_HOME) == INPUT_ACTIVE);
     const bool atEnd = (digitalRead(PIN_LIMIT_END) == INPUT_ACTIVE);
+    const uint32_t moveTimeoutMs = (turnDurationMs > MAX_MOVE_TIMEOUT_MS) ? turnDurationMs : MAX_MOVE_TIMEOUT_MS;
 
     if (atHome && atEnd)
     {
@@ -103,7 +104,7 @@ void EggTurnerManager::update()
                 nextMoveToEnd = true;
                 setFault(FAULT_TURN_TIMEOUT, false);
             }
-            else if ((now - stateStartMs) > MAX_MOVE_TIMEOUT_MS)
+            else if ((now - stateStartMs) > moveTimeoutMs)
             {
                 stopMotor();
                 state = TurnerState::FAULT;
@@ -121,7 +122,7 @@ void EggTurnerManager::update()
                 nextMoveToEnd = false;
                 setFault(FAULT_TURN_TIMEOUT, false);
             }
-            else if ((now - stateStartMs) > MAX_MOVE_TIMEOUT_MS)
+            else if ((now - stateStartMs) > moveTimeoutMs)
             {
                 stopMotor();
                 state = TurnerState::FAULT;
@@ -189,6 +190,13 @@ void EggTurnerManager::disable()
     state = TurnerState::IDLE;
 }
 
+void EggTurnerManager::stopForSafety()
+{
+    controlEnabled = false;
+    stopMotor();
+    state = TurnerState::IDLE;
+}
+
 bool EggTurnerManager::isEnabled()
 {
     return controlEnabled;
@@ -230,7 +238,8 @@ void EggTurnerManager::stopMotor()
 
 void EggTurnerManager::startMoveToHome()
 {
-    if (SensorManager::isDoorOpen())
+    const bool lockdown = IncubationProfile::isLockdown(IncubationProfile::getStartEpoch() + (millis() / 1000UL));
+    if (!controlEnabled || lockdown || SensorManager::isDoorOpen() || hasFault(FAULT_TURN_TIMEOUT) || hasFault(FAULT_LIMIT_INCONSISTENT))
     {
         return;
     }
@@ -242,7 +251,8 @@ void EggTurnerManager::startMoveToHome()
 
 void EggTurnerManager::startMoveToEnd()
 {
-    if (SensorManager::isDoorOpen())
+    const bool lockdown = IncubationProfile::isLockdown(IncubationProfile::getStartEpoch() + (millis() / 1000UL));
+    if (!controlEnabled || lockdown || SensorManager::isDoorOpen() || hasFault(FAULT_TURN_TIMEOUT) || hasFault(FAULT_LIMIT_INCONSISTENT))
     {
         return;
     }

@@ -39,6 +39,7 @@ public:
     // NEW: MQTT/HA helpers
     static const char* currentCode(); // "CHICKEN", "QUAIL", "DUCK", "GOOSE"
     static bool setProfileByCode(const String& code, uint32_t nowEpoch);
+    static IncubationProfileType profileFromCode(const String& code);
 
 private:
     static IncubationProfileType activeProfile;

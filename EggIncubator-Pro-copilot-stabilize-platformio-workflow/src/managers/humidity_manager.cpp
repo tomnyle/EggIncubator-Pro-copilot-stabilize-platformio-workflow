@@ -77,13 +77,20 @@ void HumidityManager::setHysteresis(float hysteresis)
     humidityHysteresis = (hysteresis < 1.0f) ? 1.0f : hysteresis;
 }
 
-void HumidityManager::enable() { controlEnabled = true; }
+void HumidityManager::enable()
+{
+    controlEnabled = true;
+    runStartMs = 0;
+    cooldownUntilMs = 0;
+}
 
 void HumidityManager::disable()
 {
     controlEnabled = false;
     RelayController::humidifier(false);
     humidifierRunning = false;
+    runStartMs = 0;
+    cooldownUntilMs = 0;
 }
 
 bool HumidityManager::isEnabled() { return controlEnabled; }

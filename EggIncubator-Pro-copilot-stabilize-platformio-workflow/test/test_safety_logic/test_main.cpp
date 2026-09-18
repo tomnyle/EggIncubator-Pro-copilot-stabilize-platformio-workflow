@@ -22,6 +22,19 @@ int main()
     assert(SafetyLogic::incubationDayFromElapsed(0) == 1);
     assert(SafetyLogic::incubationDayFromElapsed(86400) == 2);
     assert(SafetyLogic::incubationDayFromElapsed(18UL * 86400UL) == 19);
+    assert(SafetyLogic::applyTargetUpdate(37.5f, 38.0f, 34.0f, 39.5f) == 38.0f);
+    assert(SafetyLogic::applyTargetUpdate(37.5f, 45.0f, 34.0f, 39.5f) == 37.5f);
+    assert(SafetyLogic::applyTargetUpdate(60.0f, 65.0f, 30.0f, 85.0f) == 65.0f);
+    assert(SafetyLogic::applyTargetUpdate(60.0f, 10.0f, 30.0f, 85.0f) == 60.0f);
+    assert(SafetyLogic::parseMode("AUTO") == SafetyLogic::RequestedMode::AUTO);
+    assert(SafetyLogic::parseMode("INVALID") == SafetyLogic::RequestedMode::INVALID);
+    assert(SafetyLogic::manualRelayAllowed(true, false));
+    assert(!SafetyLogic::manualRelayAllowed(true, true));
+    assert(SafetyLogic::classifyCommandTopic("eggincubator/mode/set") == SafetyLogic::CommandRoute::MODE_SET);
+    assert(SafetyLogic::classifyCommandTopic("eggincubator/target/temperature/set") == SafetyLogic::CommandRoute::TARGET_TEMP_SET);
+    assert(SafetyLogic::classifyCommandTopic("eggincubator/relay/heater/set") == SafetyLogic::CommandRoute::RELAY_HEATER_SET);
+    assert(SafetyLogic::classifyCommandTopic("eggincubator/turner/command") == SafetyLogic::CommandRoute::TURNER_COMMAND);
+    assert(SafetyLogic::classifyCommandTopic("eggincubator/unknown") == SafetyLogic::CommandRoute::UNKNOWN);
 
     using SafetyLogic::TurnerInputs;
     using SafetyLogic::TurnerState;

@@ -67,7 +67,8 @@ void restoreState()
 
     prefs.end();
 
-    IncubationProfile::setProfileByCode(systemState.incubation.profileCode, 0);
+    const IncubationProfileType profile = IncubationProfile::profileFromCode(systemState.incubation.profileCode);
+    IncubationProfile::begin(profile, systemState.incubation.incubationStartEpoch);
 }
 
 uint16_t getIncubationDay()
@@ -94,7 +95,7 @@ void setMode(SystemMode mode)
     {
         TemperatureManager::disable();
         HumidityManager::disable();
-        EggTurnerManager::disable();
+        EggTurnerManager::stopForSafety();
         RelayController::allOff();
     }
     else if (mode == SystemMode::AUTO)
@@ -121,8 +122,7 @@ void applyProfileControl()
 
     if (lockdown)
     {
-        systemState.incubation.turningEnabled = false;
-        EggTurnerManager::disable();
+        EggTurnerManager::stopForSafety();
     }
     else if (systemState.mode == SystemMode::AUTO && systemState.incubation.turningEnabled)
     {
@@ -212,7 +212,8 @@ void setup()
 
     restoreState();
 
-    IncubationProfile::setProfileByCode(systemState.incubation.profileCode, 0);
+    const IncubationProfileType profile = IncubationProfile::profileFromCode(systemState.incubation.profileCode);
+    IncubationProfile::begin(profile, systemState.incubation.incubationStartEpoch);
 
     network.begin();
     mqtt.begin();
@@ -260,7 +261,7 @@ void loop()
         {
             TemperatureManager::disable();
             HumidityManager::disable();
-            EggTurnerManager::disable();
+            RelayController::motor(false, false, false);
         }
     }
 

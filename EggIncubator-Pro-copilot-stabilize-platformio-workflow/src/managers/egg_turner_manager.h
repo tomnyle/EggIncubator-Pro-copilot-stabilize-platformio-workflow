@@ -30,6 +30,7 @@ public:
 
     static void enable();
     static void disable();
+    static void stopForSafety();
     static bool isEnabled();
 
     static bool isTurnerRunning();

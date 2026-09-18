@@ -73,14 +73,25 @@ const char* IncubationProfile::currentCode()
 
 bool IncubationProfile::setProfileByCode(const String& code, uint32_t nowEpoch)
 {
+    const IncubationProfileType profile = profileFromCode(code);
+    const bool valid = (code.equalsIgnoreCase("CHICKEN") ||
+                        code.equalsIgnoreCase("QUAIL") ||
+                        code.equalsIgnoreCase("DUCK") ||
+                        code.equalsIgnoreCase("GOOSE"));
+    if (!valid) return false;
+
+    setProfile(profile, nowEpoch);
+    return true;
+}
+
+IncubationProfileType IncubationProfile::profileFromCode(const String& code)
+{
     String c = code;
     c.trim();
     c.toUpperCase();
 
-    if (c == "CHICKEN") { setProfile(IncubationProfileType::CHICKEN, nowEpoch); return true; }
-    if (c == "QUAIL") { setProfile(IncubationProfileType::QUAIL, nowEpoch); return true; }
-    if (c == "DUCK") { setProfile(IncubationProfileType::DUCK, nowEpoch); return true; }
-    if (c == "GOOSE") { setProfile(IncubationProfileType::GOOSE, nowEpoch); return true; }
-
-    return false;
+    if (c == "QUAIL") return IncubationProfileType::QUAIL;
+    if (c == "DUCK") return IncubationProfileType::DUCK;
+    if (c == "GOOSE") return IncubationProfileType::GOOSE;
+    return IncubationProfileType::CHICKEN;
 }

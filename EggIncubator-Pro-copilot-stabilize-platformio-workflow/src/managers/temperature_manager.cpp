@@ -104,6 +104,7 @@ void TemperatureManager::setMinSwitchMs(uint32_t minIntervalMs)
 void TemperatureManager::enable()
 {
     controlEnabled = true;
+    lastSwitchMs = 0;
 }
 
 void TemperatureManager::disable()
@@ -111,6 +112,7 @@ void TemperatureManager::disable()
     controlEnabled = false;
     heaterRunning = false;
     RelayController::heater(false);
+    lastSwitchMs = 0;
 }
 
 bool TemperatureManager::isEnabled() { return controlEnabled; }
