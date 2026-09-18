@@ -54,9 +54,4 @@ jobs:
         run: test -f .pio/build/esp32dev_debug/firmware.elf
 
       - name: Run pure C++ safety tests
-        run: |
-          if find test -type f \( -name '*.c' -o -name '*.cc' -o -name '*.cpp' -o -name '*.cxx' \) | grep -q .; then
-            pio test -e native
-          else
-            echo "No pure C++ safety tests present on this branch."
-          fi
+        run: pio test -e native
