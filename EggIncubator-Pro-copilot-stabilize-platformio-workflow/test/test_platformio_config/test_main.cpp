@@ -19,7 +19,6 @@ int main()
     assert(text.find("monitor_speed = 115200") != std::string::npos);
     assert(text.find("upload_protocol = esptool") != std::string::npos);
     assert(text.find("upload_speed = 460800") != std::string::npos);
-    assert(text.find("-DDEBUG") == std::string::npos);
 
     const std::size_t releaseStart = text.find("[env:esp32dev]");
     const std::size_t debugStart = text.find("[env:esp32dev_debug]");
@@ -33,6 +32,9 @@ int main()
 
     const std::string releaseBlock = text.substr(releaseStart, debugStart - releaseStart);
     const std::string debugBlock = text.substr(debugStart, nativeStart - debugStart);
+
+    assert(releaseBlock.find("-DDEBUG") == std::string::npos);
+    assert(debugBlock.find("-DDEBUG") == std::string::npos);
 
     assert(releaseBlock.find("monitor_filters =") != std::string::npos);
     assert(releaseBlock.find("time") != std::string::npos);

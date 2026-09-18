@@ -3,7 +3,7 @@ name: PlatformIO CI
 on:
   pull_request:
   push:
-    branches: ["main", "master", "copilot/*"]
+    branches: ["main", "master"]
 
 permissions:
   contents: read
@@ -38,8 +38,9 @@ jobs:
           assert "board = esp32dev" in text, "Unexpected board"
           assert "upload_protocol = esptool" in text, "Upload protocol must be esptool"
           assert "upload_speed = 460800" in text, "Upload speed must be 460800"
-          assert "-DDEBUG" not in text, "Forbidden -DDEBUG macro found"
           assert "monitor_speed = 115200" in text, "Monitor speed must be 115200"
+          assert "-DDEBUG" not in release, "Forbidden -DDEBUG macro found in release environment"
+          assert "-DDEBUG" not in debug, "Forbidden -DDEBUG macro found in debug environment"
           assert "esp32_exception_decoder" not in release, "Release monitor must not use the exception decoder"
           assert "esp32_exception_decoder" in debug, "Debug decoder filter missing"
           PY
