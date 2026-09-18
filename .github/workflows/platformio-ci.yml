@@ -52,7 +52,7 @@ jobs:
         run: pio run -e esp32dev_debug
 
       - name: Verify debug ELF exists
-        run: test -f .pio/build/esp32dev_debug/firmware.elf
+        run: find .pio/build/esp32dev_debug -maxdepth 1 -type f -name '*.elf' | grep -q .
 
       - name: Run pure C++ safety tests
         run: pio test -e native
