@@ -106,10 +106,10 @@ flowchart LR
     V3 -->|VDD| DS
     GND ---|GND| DS
 
-    V3 -->|330 Ω| OH -->|active-low GPIO25| HEAT
-    V3 -->|330 Ω| OHU -->|active-low GPIO26| HUM
-    V3 -->|330 Ω| OF -->|active-low GPIO27| CIRC
-    V3 -->|330 Ω| OV -->|active-low GPIO14| VENT
+    V3 -->|330 Ω| OH -->|LED current sunk by GPIO25 LOW| HEAT
+    V3 -->|330 Ω| OHU -->|LED current sunk by GPIO26 LOW| HUM
+    V3 -->|330 Ω| OF -->|LED current sunk by GPIO27 LOW| CIRC
+    V3 -->|330 Ω| OV -->|LED current sunk by GPIO14 LOW| VENT
     OH -->|open collector| RH
     OHU -->|open collector| RHU
     OF -->|open collector| RF
