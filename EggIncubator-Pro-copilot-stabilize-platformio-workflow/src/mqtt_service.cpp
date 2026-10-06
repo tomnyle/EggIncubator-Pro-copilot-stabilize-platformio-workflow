@@ -251,13 +251,10 @@ void MQTTService::publishAvailability()
 
 void MQTTService::publishRelayStates()
 {
-    // Vì RelayController chưa có getter state trong header bạn gửi,
-    // tạm publish OFF cho 4 relay này để không phụ thuộc IncubatorController.
-    // Khi bạn có getter thật, mình đổi lại sau.
-    publish(MQTT_ROOT_TOPIC "/heater/state", "OFF", true);
-    publish(MQTT_ROOT_TOPIC "/humidifier/state", "OFF", true);
-    publish(MQTT_ROOT_TOPIC "/fan/state", "OFF", true);
-    publish(MQTT_ROOT_TOPIC "/vent/state", "OFF", true);
+    publish(MQTT_ROOT_TOPIC "/heater/state", RelayController::heaterState() ? "ON" : "OFF", true);
+    publish(MQTT_ROOT_TOPIC "/humidifier/state", RelayController::humidifierState() ? "ON" : "OFF", true);
+    publish(MQTT_ROOT_TOPIC "/fan/state", RelayController::fanState() ? "ON" : "OFF", true);
+    publish(MQTT_ROOT_TOPIC "/vent/state", RelayController::ventilationState() ? "ON" : "OFF", true);
 
     publish(MQTT_ROOT_TOPIC "/turner/state", EggTurnerManager::isEnabled() ? "ON" : "OFF", true);
     publish(MQTT_ROOT_TOPIC "/turn_count", String(EggTurnerManager::getTurnCount()), true);
@@ -314,8 +311,28 @@ void MQTTService::callback(char *topic, byte *payload, unsigned int length)
     Serial.print(" = ");
     Serial.println(message);
 
-    if (cmdTopic.endsWith("/heater/set")) RelayController::heater(state);
-    else if (cmdTopic.endsWith("/humidifier/set")) RelayController::humidifier(state);
+    if (cmdTopic.endsWith("/heater/set"))
+    {
+        if (!state || SensorManager::isSHT31ReadingValid())
+        {
+            RelayController::heater(state);
+        }
+        else
+        {
+            Serial.println("[MQTT] Heater ON rejected: SHT31 reading is invalid");
+        }
+    }
+    else if (cmdTopic.endsWith("/humidifier/set"))
+    {
+        if (!state || SensorManager::isSHT31ReadingValid())
+        {
+            RelayController::humidifier(state);
+        }
+        else
+        {
+            Serial.println("[MQTT] Humidifier ON rejected: SHT31 reading is invalid");
+        }
+    }
     else if (cmdTopic.endsWith("/fan/set")) RelayController::fan(state);
     else if (cmdTopic.endsWith("/vent/set")) RelayController::ventilation(state);
     else if (cmdTopic.endsWith("/turner/set"))

@@ -3,6 +3,11 @@
 
 void GPIOManager::begin()
 {
+    digitalWrite(PIN_HEATER_SSR, RELAY_OFF);
+    digitalWrite(PIN_HUMIDIFIER, RELAY_OFF);
+    digitalWrite(PIN_FAN_CIRCULATION, RELAY_OFF);
+    digitalWrite(PIN_FAN_VENT, RELAY_OFF);
+
     /**********************************************************
      * OUTPUT
      **********************************************************/
@@ -30,10 +35,10 @@ void GPIOManager::begin()
      * SAFE STATE
      **********************************************************/
 
-    digitalWrite(PIN_HEATER_SSR, LOW);
-    digitalWrite(PIN_HUMIDIFIER, LOW);
-    digitalWrite(PIN_FAN_CIRCULATION, LOW);
-    digitalWrite(PIN_FAN_VENT, LOW);
+    digitalWrite(PIN_HEATER_SSR, RELAY_OFF);
+    digitalWrite(PIN_HUMIDIFIER, RELAY_OFF);
+    digitalWrite(PIN_FAN_CIRCULATION, RELAY_OFF);
+    digitalWrite(PIN_FAN_VENT, RELAY_OFF);
 
     // Tắt driver motor khi khởi động
     digitalWrite(PIN_BTS_ENABLE, LOW);

@@ -3,7 +3,7 @@
 **Date**: July 26, 2026  
 **Project**: Smart Egg Incubator with Home Assistant Integration  
 **Version**: 0.3.0  
-**Status**: ✅ **CORE FEATURES COMPLETE** (95% Complete)
+**Status**: 🚧 **PROTOTYPE — NOT READY FOR PRODUCTION**
 
 ---
 
@@ -448,7 +448,9 @@ main.cpp
 - ✅ Home Assistant automation setup
 - ✅ Further enhancements
 
-**Project Status: PRODUCTION-READY (Core Features)**
+**Project Status: NOT PRODUCTION-READY**
+
+The repository has no completed unit, integration, or hardware qualification tests. Treat the listed features as implementation claims, not evidence of production readiness. Resolve the test and hardware validation items above before deployment.
 
 ---
 

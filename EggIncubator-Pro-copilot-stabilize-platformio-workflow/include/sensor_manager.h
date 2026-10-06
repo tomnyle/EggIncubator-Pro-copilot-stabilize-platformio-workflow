@@ -25,6 +25,8 @@ public:
 
     static bool isSHT31Ready();
 
+    static bool isSHT31ReadingValid();
+
     // DS18B20 (Egg Temperature)
     static float getEggTemperature();
 
@@ -47,6 +49,7 @@ private:
     static float eggTemp;
 
     static bool sht31Ready;
+    static bool sht31ReadingValid;
     static bool ds18b20Ready;
 
     static unsigned long lastSHT31Update;
