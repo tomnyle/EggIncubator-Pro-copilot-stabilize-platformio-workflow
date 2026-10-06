@@ -1,4 +1,6 @@
 #include "sensor_manager.h"
+#include <math.h>
+#include <Wire.h>
 #include "pins.h"
 #include "logger.h"
 #include "system_state.h"
@@ -9,13 +11,13 @@
 
 Adafruit_SHT31 SensorManager::sht31;
 
-OneWire SensorManager::oneWire(PIN_I2C_SDA);  // OneWire on same pin for now
+OneWire SensorManager::oneWire(PIN_DS18B20);
 
 DallasTemperature SensorManager::ds18b20(&SensorManager::oneWire);
 
-float SensorManager::airTemp = 0.0f;
-float SensorManager::airHumidity = 0.0f;
-float SensorManager::eggTemp = 0.0f;
+float SensorManager::airTemp = NAN;
+float SensorManager::airHumidity = NAN;
+float SensorManager::eggTemp = NAN;
 
 bool SensorManager::sht31Ready = false;
 bool SensorManager::ds18b20Ready = false;
@@ -32,6 +34,8 @@ const uint32_t SensorManager::DS18B20_UPDATE_INTERVAL = 3000;  // 3 seconds
 
 void SensorManager::begin()
 {
+    Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
+
     Logger::info("--------------------------------");
     Logger::info("Initializing Sensor Manager");
     Logger::info("--------------------------------");
@@ -104,7 +108,8 @@ void SensorManager::updateSHT31()
     float humidity = sht31.readHumidity();
 
     // Check for valid readings
-    if (!isnan(temp) && !isnan(humidity))
+    if (isfinite(temp) && temp >= -40.0f && temp <= 125.0f &&
+        isfinite(humidity) && humidity >= 0.0f && humidity <= 100.0f)
     {
         airTemp = temp;
         airHumidity = humidity;
@@ -114,6 +119,8 @@ void SensorManager::updateSHT31()
     }
     else
     {
+        airTemp = NAN;
+        airHumidity = NAN;
         Logger::warning("SHT31: Invalid reading");
     }
 }
@@ -130,7 +137,7 @@ void SensorManager::updateDS18B20()
     float temp = ds18b20.getTempCByIndex(0);
 
     // DS18B20 returns -127 on error
-    if (temp > -127.0f && temp < 85.0f)
+    if (isfinite(temp) && temp >= -55.0f && temp <= 125.0f && temp != 85.0f)
     {
         eggTemp = temp;
 
@@ -139,6 +146,7 @@ void SensorManager::updateDS18B20()
     }
     else
     {
+        eggTemp = NAN;
         Logger::warning("DS18B20: Invalid reading");
     }
 }
@@ -176,7 +184,7 @@ float SensorManager::getEggTemperature()
 
 bool SensorManager::isSHT31Ready()
 {
-    return sht31Ready;
+    return sht31Ready && isfinite(airTemp) && isfinite(airHumidity);
 }
 
 /******************************************************
@@ -185,7 +193,7 @@ bool SensorManager::isSHT31Ready()
 
 bool SensorManager::isDS18B20Ready()
 {
-    return ds18b20Ready;
+    return ds18b20Ready && isfinite(eggTemp);
 }
 
 /******************************************************
@@ -194,5 +202,5 @@ bool SensorManager::isDS18B20Ready()
 
 bool SensorManager::allReady()
 {
-    return sht31Ready && ds18b20Ready;
+    return isSHT31Ready() && isDS18B20Ready();
 }

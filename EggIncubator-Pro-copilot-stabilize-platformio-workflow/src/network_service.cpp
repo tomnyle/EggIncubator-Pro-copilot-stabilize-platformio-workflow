@@ -17,6 +17,12 @@ NetworkService::NetworkService()
 
 void NetworkService::begin()
 {
+    if (WIFI_SSID[0] == '\0')
+    {
+        Logger::warning("WiFi not configured; add include/secrets.h");
+        return;
+    }
+
     WiFi.mode(WIFI_STA);
 
     WiFi.setAutoReconnect(true);
@@ -33,6 +39,11 @@ void NetworkService::begin()
 
 void NetworkService::loop()
 {
+    if (WIFI_SSID[0] == '\0')
+    {
+        return;
+    }
+
     updateStatus();
 
     if (wifiConnected)

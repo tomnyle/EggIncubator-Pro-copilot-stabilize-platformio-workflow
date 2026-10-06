@@ -4,7 +4,9 @@
 #include "managers/temperature_manager.h"
 #include "managers/humidity_manager.h"
 #include "managers/egg_turner_manager.h"
+#include "gpio_manager.h"
 #include "relay_controller.h"
+#include "sensor_manager.h"
 #include "network_service.h"
 #include "mqtt_service.h"
 #include "incubation_profile.h"
@@ -28,22 +30,26 @@ void setup()
     Logger::begin(115200);
     Serial.println("[BOOT] logger started");
 
+    GPIOManager::begin();
+    RelayController::begin();
+    SensorManager::begin();
+    TemperatureManager::begin();
+    HumidityManager::begin();
+    EggTurnerManager::begin();
+
     Serial.println("[BOOT] network.begin()");
     network.begin();
 
     Serial.println("[BOOT] mqtt.begin()");
     mqtt.begin();
 
-    RelayController::begin();
-    TemperatureManager::begin();
-    HumidityManager::begin();
-    EggTurnerManager::begin();
-
     // Default profile: CHICKEN
     IncubationProfile::begin(IncubationProfileType::CHICKEN, millis());
 
     // Apply one-time initial profile values
     applyProfileControl();
+    TemperatureManager::enable();
+    HumidityManager::enable();
 
     lastUpdateTime = millis();
     Serial.println("[BOOT] Initialization done.");
@@ -60,6 +66,7 @@ void loop()
 
     network.loop();
     mqtt.loop();
+    SensorManager::update();
 
     uint32_t now = millis();
     if (now - lastUpdateTime >= updateInterval)

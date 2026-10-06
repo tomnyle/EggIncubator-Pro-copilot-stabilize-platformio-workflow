@@ -13,6 +13,11 @@ public:
     static void fan(bool state);
     static void ventilation(bool state);
 
+    static bool isHeaterOn();
+    static bool isHumidifierOn();
+    static bool isFanOn();
+    static bool isVentilationOn();
+
     // Output Toggle
     static void toggleHeater();
     static void toggleHumidifier();

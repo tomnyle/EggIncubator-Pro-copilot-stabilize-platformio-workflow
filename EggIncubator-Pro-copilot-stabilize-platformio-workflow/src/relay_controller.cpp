@@ -79,6 +79,26 @@ void RelayController::ventilation(bool state)
         state);
 }
 
+bool RelayController::isHeaterOn()
+{
+    return systemState.relay.heater;
+}
+
+bool RelayController::isHumidifierOn()
+{
+    return systemState.relay.humidifier;
+}
+
+bool RelayController::isFanOn()
+{
+    return systemState.relay.circulationFan;
+}
+
+bool RelayController::isVentilationOn()
+{
+    return systemState.relay.ventilationFan;
+}
+
 /******************************************************
  * Toggle
  ******************************************************/

@@ -48,8 +48,11 @@ void HumidityManager::update()
 
     currentHumidity = SensorManager::getAirHumidity();
 
-    if (currentHumidity < 0 || !SensorManager::isSHT31Ready())
+    if (!isfinite(currentHumidity) || currentHumidity < 0 ||
+        !SensorManager::isSHT31Ready())
     {
+        RelayController::humidifier(false);
+        humidifierRunning = false;
         return;
     }
 
