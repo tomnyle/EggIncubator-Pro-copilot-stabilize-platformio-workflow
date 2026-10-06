@@ -72,7 +72,7 @@ A complete IoT solution for automated egg incubation with real-time monitoring a
 ### Power
 - **ESP32**: 5V USB or the optional fused 12V-to-5V buck input shown in the schematic; do not use both at once unless the selected DevKit supports it
 - **Heater/Fans**: 12V DC
-- **Motor**: Separate supply per motor/BTS7960 rating; its module logic ground and motor-supply return are typically common
+- **Motor**: Separately fused supply to BTS7960 VMOT, sized for motor stall current; the BTS7960 logic ground and motor-supply return are typically common
 
 ### Communication
 - **WiFi**: Built-in ESP32 WiFi

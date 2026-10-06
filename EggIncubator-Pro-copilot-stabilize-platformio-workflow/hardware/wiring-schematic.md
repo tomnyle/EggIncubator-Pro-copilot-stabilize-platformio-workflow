@@ -74,6 +74,8 @@ flowchart LR
     BUCK["12 V to 5 V buck module"]
     VIN["12 V DC input"]
     FUSE["F1 load-rated fuse"]
+    MOTOR_VIN["Motor supply input"]
+    MOTOR_FUSE["F2 motor-rated fuse"]
     CIN["C1 470 µF / 25 V"]
     COUT["C2 470 µF / 10 V"]
     POWER_GND["Power return / GND"]
@@ -81,6 +83,7 @@ flowchart LR
     AUX["Auxiliary sensor header<br/>I²C + reserved ADC nets"]
     STATUS["Optional LED + series resistor"]
     MOTOR_SUPPLY["Separate DC motor supply"]
+    MOTOR_CAP["Optional 470 µF input capacitor<br/>only if driver board lacks bulk capacitance"]
     MOTOR_LOAD["Egg-turner motor"]
     HEATER_LOAD["Heater/load side<br/>rated isolated output"]
     HUM_LOAD["Humidifier/load side"]
@@ -123,8 +126,10 @@ flowchart LR
     EN --> BLEN --> BRIDGE
     GND --- BG
     BG --- BRIDGE
-    MOTOR_SUPPLY --> VM --> BRIDGE
+    MOTOR_VIN --> MOTOR_FUSE --> MOTOR_SUPPLY --> VM --> BRIDGE
     GND --- MOTOR_SUPPLY
+    MOTOR_SUPPLY --- MOTOR_CAP
+    MOTOR_CAP --- GND
     BRIDGE --> MOUT --> MOTOR_LOAD
 
     HOME --- SH --- GND
@@ -164,6 +169,8 @@ flowchart LR
 - The 330 Ω input resistors provide roughly 6 mA LED current from a 3.3 V rail with a typical PC817 LED drop. Verify worst-case PC817 CTR/output sink current against the actual relay/SSR input; use an additional suitable driver if it is insufficient. The schematic does not guarantee compatibility with arbitrary modules.
 - Sensor power is 3.3 V only for sensors rated for it. J8's ADC nets are reserved; select safe ESP32 ADC pins and update firmware before using them.
 - R11/R12 provide optional 4.7 kΩ I²C pull-ups and are marked DNP; populate only if the connected sensor modules do not already provide suitable pull-ups.
-- Keep the motor supply positive separate from the ESP32 USB supply. A typical BTS7960 module has common logic and motor return; J5 therefore connects both grounds to system GND. Confirm this against the exact driver board before wiring.
+- J11/F2 are an explicit, separately fused motor-supply input to the BTS7960 `VMOT_PLUS` pin. Choose the fuse from motor stall/inrush current, wiring, and module ratings; the motor positive rail is not supplied by the 5 V buck.
+- Keep the motor supply positive separate from the ESP32 USB/5 V rail. A typical BTS7960 module has common logic and motor return; J5 therefore connects both grounds to system GND. Confirm this against the exact driver board before wiring.
+- C3 is optional and DNP by default; populate a correctly rated bulk capacitor near the BTS7960 supply only if the selected module does not already provide adequate input capacitance. Do not place a capacitor across switched motor outputs unless the exact driver manufacturer recommends it.
 - Heater and other load-side wiring is intentionally not specified: the project does not identify load voltages, currents, or exact relay/SSR models. Use correctly rated, isolated switching devices, appropriate fusing/enclosures, and qualified mains wiring where applicable. Never connect mains voltage to the ESP32 or low-voltage side.
 - Converter and connector footprints, load-dependent fuse ratings, PCB placement/routing, creepage/clearance, thermal design, and DRC remain to be completed after exact modules and loads are selected. This schematic is not ready for PCB fabrication.
