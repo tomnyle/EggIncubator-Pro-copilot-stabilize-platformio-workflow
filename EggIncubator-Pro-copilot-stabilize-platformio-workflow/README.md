@@ -82,7 +82,7 @@ A complete IoT solution for automated egg incubation with real-time monitoring a
 
 ## 📐 Wiring Diagram
 
-See the detailed, firmware-aligned [hardware wiring diagram](docs/hardware-wiring.md), including low-voltage power and safety notes.
+See the detailed, firmware-aligned [hardware wiring diagram](docs/hardware-wiring.md), including [schematic](docs/eggincubator-schematic-concept.svg) and [PCB placement](docs/eggincubator-pcb-placement-concept.svg) concept drafts. These are not manufacturing files.
 
 ---
 
