@@ -5,6 +5,22 @@ certified circuit schematic. Confirm the exact ESP32 board and every module's
 datasheet before wiring. The current firmware uses GPIO 16 for the DS18B20;
 GPIO 16 may be reserved on ESP32 modules with PSRAM.
 
+## Concept design drafts
+
+These illustrations are design discussions only. They are not KiCad source,
+verified schematics, routed PCBs, or fabrication outputs.
+
+- [Low-voltage schematic concept (SVG)](eggincubator-schematic-concept.svg)
+- [PCB placement concept (SVG, not to scale)](eggincubator-pcb-placement-concept.svg)
+
+The PCB concept keeps the ESP32 DevKit, relay/SSR boards, and BTS7960 as
+off-board modules. It intentionally excludes heater/load power and mains
+circuitry. A production schematic/PCB needs the exact module and connector
+part numbers, ESP32 board outline and pin spacing, load voltage/current,
+mechanical dimensions, and PCB manufacturer constraints. KiCad CLI was not
+available in the environment, so no native KiCad or Gerber files were generated
+or validated.
+
 ## Connection diagram
 
 ```mermaid

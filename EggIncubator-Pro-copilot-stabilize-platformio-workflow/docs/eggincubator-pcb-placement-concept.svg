@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="760" viewBox="0 0 1000 760" role="img" aria-labelledby="title desc">
+  <title id="title">EggIncubator Pro PCB placement concept</title>
+  <desc id="desc">Not-to-scale conceptual placement of a low-voltage carrier PCB with external ESP32 DevKit and off-board relay and BTS7960 modules. Not a routed or manufacturable PCB.</desc>
+  <defs>
+    <style>
+      text { font-family: Arial, sans-serif; fill: #17212b; }
+      .title { font-size: 26px; font-weight: bold; }
+      .warn { font-size: 15px; fill: #9b2c1f; font-weight: bold; }
+      .label { font-size: 14px; font-weight: bold; }
+      .small { font-size: 12px; }
+      .tiny { font-size: 10px; }
+      .outline { fill: #f7fbf8; stroke: #24734a; stroke-width: 4; }
+      .part { fill: #e8eef7; stroke: #38506a; stroke-width: 2; rx: 6; }
+      .header { fill: #fff3d6; stroke: #a9781d; stroke-width: 2; rx: 4; }
+      .keepout { fill: #fff0ee; stroke: #bc4138; stroke-width: 2; stroke-dasharray: 8 5; }
+      .line { stroke: #8192a3; stroke-width: 1.5; stroke-dasharray: 5 5; }
+    </style>
+  </defs>
+  <rect width="1000" height="760" fill="#fff"/>
+  <text x="35" y="45" class="title">EggIncubator Pro — bố trí PCB concept</text>
+  <text x="35" y="73" class="warn">KHÔNG THEO TỈ LỆ · CHƯA ROUTE · KHÔNG CÓ FOOTPRINT/DRILL · KHÔNG GỬI FAB</text>
+
+  <rect x="85" y="125" width="830" height="505" class="outline"/>
+  <text x="500" y="155" text-anchor="middle" class="label">PCB carrier low-voltage — biên bo/kích thước TBD</text>
+
+  <!-- DevKit as pluggable module -->
+  <rect x="365" y="205" width="270" height="235" class="part"/>
+  <text x="500" y="238" text-anchor="middle" class="label">ESP32 DevKit (cắm ngoài)</text>
+  <text x="500" y="263" text-anchor="middle" class="small">Model, số chân và khoảng cách header TBD</text>
+  <rect x="340" y="275" width="18" height="95" class="header"/>
+  <rect x="642" y="275" width="18" height="95" class="header"/>
+  <text x="500" y="405" text-anchor="middle" class="tiny">Khoảng trống anten / USB theo datasheet board</text>
+  <rect x="610" y="185" width="115" height="38" class="keepout"/>
+  <text x="667" y="209" text-anchor="middle" class="tiny">KEEP-OUT anten?</text>
+
+  <!-- low voltage connectors -->
+  <rect x="125" y="200" width="170" height="75" class="header"/>
+  <text x="210" y="228" text-anchor="middle" class="label">J-SENSOR</text>
+  <text x="210" y="250" text-anchor="middle" class="small">SHT31 / I²C</text>
+  <rect x="125" y="305" width="170" height="75" class="header"/>
+  <text x="210" y="333" text-anchor="middle" class="label">J-1WIRE</text>
+  <text x="210" y="355" text-anchor="middle" class="small">DS18B20 / pull-up</text>
+  <rect x="125" y="430" width="170" height="105" class="header"/>
+  <text x="210" y="458" text-anchor="middle" class="label">J-INPUTS</text>
+  <text x="210" y="482" text-anchor="middle" class="small">HOME / END / DOOR</text>
+  <text x="210" y="505" text-anchor="middle" class="tiny">dry-contact; pin order TBD</text>
+
+  <!-- external module connectors -->
+  <rect x="710" y="245" width="170" height="110" class="header"/>
+  <text x="795" y="274" text-anchor="middle" class="label">J-RELAY</text>
+  <text x="795" y="298" text-anchor="middle" class="small">HEAT / HUM / FAN / VENT</text>
+  <text x="795" y="322" text-anchor="middle" class="tiny">Logic only; no load current</text>
+  <rect x="710" y="390" width="170" height="105" class="header"/>
+  <text x="795" y="418" text-anchor="middle" class="label">J-BTS7960</text>
+  <text x="795" y="442" text-anchor="middle" class="small">RPWM / LPWM / EN / GND</text>
+  <text x="795" y="466" text-anchor="middle" class="tiny">External motor driver module</text>
+  <rect x="710" y="525" width="170" height="70" class="header"/>
+  <text x="795" y="552" text-anchor="middle" class="label">J-BUZZER</text>
+  <text x="795" y="575" text-anchor="middle" class="tiny">driver circuit TBD</text>
+
+  <!-- power input / conversion TBD -->
+  <rect x="365" y="485" width="270" height="95" class="part"/>
+  <text x="500" y="516" text-anchor="middle" class="label">J-POWER / protection TBD</text>
+  <text x="500" y="541" text-anchor="middle" class="small">Chỉ nguồn logic đúng chuẩn DevKit</text>
+  <text x="500" y="562" text-anchor="middle" class="tiny">không nối motor/heater/AC vào carrier này</text>
+
+  <!-- conceptual connection traces -->
+  <path d="M295 238 H340" class="line"/>
+  <path d="M295 342 H340" class="line"/>
+  <path d="M295 480 H330 V390 H340" class="line"/>
+  <path d="M660 300 H710" class="line"/>
+  <path d="M660 420 H710" class="line"/>
+  <path d="M660 535 H710" class="line"/>
+  <path d="M500 440 V485" class="line"/>
+
+  <circle cx="110" cy="150" r="7" fill="#fff" stroke="#24734a" stroke-width="2"/>
+  <circle cx="890" cy="150" r="7" fill="#fff" stroke="#24734a" stroke-width="2"/>
+  <circle cx="110" cy="605" r="7" fill="#fff" stroke="#24734a" stroke-width="2"/>
+  <circle cx="890" cy="605" r="7" fill="#fff" stroke="#24734a" stroke-width="2"/>
+  <text x="35" y="672" class="small">Lỗ bắt vít minh hoạ, không định kích thước. Chưa xác định stackup, copper, clearance, creepage,</text>
+  <text x="35" y="693" class="small">bề rộng trace, thermal relief, drill, solder mask hoặc footprint theo hãng PCB.</text>
+  <text x="35" y="730" class="tiny">Để hoàn thiện PCB CAD/Gerber: cần model ESP32, part/connector cụ thể, kích thước/cơ khí, dòng/điện áp, và yêu cầu fab.</text>
+</svg>

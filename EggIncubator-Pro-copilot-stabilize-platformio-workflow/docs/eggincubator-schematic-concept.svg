@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="820" viewBox="0 0 1200 820" role="img" aria-labelledby="title desc">
+  <title id="title">EggIncubator Pro low-voltage schematic concept</title>
+  <desc id="desc">Concept diagram of an ESP32 DevKit connected to sensors, low-voltage input/output headers, and an external BTS7960 module. Not a verified electrical schematic.</desc>
+  <defs>
+    <style>
+      text { font-family: Arial, sans-serif; fill: #17212b; }
+      .title { font-size: 27px; font-weight: bold; }
+      .subtitle { font-size: 15px; fill: #8a2c18; font-weight: bold; }
+      .label { font-size: 15px; font-weight: bold; }
+      .small { font-size: 13px; }
+      .tiny { font-size: 11px; }
+      .block { fill: #f5f8fb; stroke: #31465a; stroke-width: 2; rx: 8; }
+      .conn { fill: #fff; stroke: #536b80; stroke-width: 1.5; rx: 5; }
+      .signal { fill: none; stroke: #2474a6; stroke-width: 2; }
+      .power { fill: none; stroke: #bd3838; stroke-width: 2; }
+      .ground { fill: none; stroke: #343a40; stroke-width: 2; }
+      .note { fill: #fff5d9; stroke: #d59a24; stroke-width: 1.5; rx: 7; }
+    </style>
+  </defs>
+  <rect width="1200" height="820" fill="#ffffff"/>
+  <text x="40" y="45" class="title">EggIncubator Pro — sơ đồ nguyên lý khái niệm (low-voltage)</text>
+  <text x="40" y="72" class="subtitle">DỰ THẢO / KHÔNG PHẢI SCHEMATIC CAD ĐÃ KIỂM CHỨNG — KHÔNG DÙNG ĐỂ CHẾ TẠO</text>
+
+  <!-- Main controller -->
+  <rect x="425" y="185" width="350" height="410" class="block"/>
+  <text x="600" y="220" text-anchor="middle" class="label">J1 — ESP32 DevKit (model TBD)</text>
+  <text x="600" y="244" text-anchor="middle" class="small">Dùng header cắm ngoài; footprint/pinout chưa chốt</text>
+  <line x1="450" y1="257" x2="750" y2="257" stroke="#94a3b0"/>
+  <text x="455" y="286" class="small">GPIO21 SDA · GPIO22 SCL</text>
+  <text x="455" y="314" class="small">GPIO16 1-Wire · GPIO4 BUZZ</text>
+  <text x="455" y="342" class="small">GPIO25 HEAT · 26 HUM · 27 FAN · 14 VENT</text>
+  <text x="455" y="370" class="small">GPIO32 RPWM · GPIO33 LPWM · GPIO23 EN</text>
+  <text x="455" y="398" class="small">GPIO18 HOME · GPIO19 END · GPIO13 DOOR</text>
+  <line x1="450" y1="418" x2="750" y2="418" stroke="#94a3b0"/>
+  <text x="455" y="448" class="small">3V3 / GND cấp cảm biến (kiểm tra dòng)</text>
+  <text x="455" y="476" class="small">USB/5V cấp DevKit theo datasheet board</text>
+  <text x="455" y="520" class="tiny">Không đưa nguồn motor/tải công suất vào chân ESP32.</text>
+  <text x="455" y="542" class="tiny">Không có mạch AC/heater trên bản concept này.</text>
+
+  <!-- SHT31 -->
+  <rect x="55" y="155" width="245" height="130" class="conn"/>
+  <text x="177" y="183" text-anchor="middle" class="label">J2 — SHT31 breakout</text>
+  <text x="75" y="211" class="small">1: 3V3</text><text x="75" y="235" class="small">2: GND</text>
+  <text x="175" y="211" class="small">3: SDA / GPIO21</text><text x="175" y="235" class="small">4: SCL / GPIO22</text>
+  <path d="M300 211 H360 V286 H425" class="power"/>
+  <path d="M300 235 H380 V314 H425" class="ground"/>
+  <path d="M300 259 H400 V286 H425" class="signal"/>
+  <path d="M300 275 H410 V286 H425" class="signal"/>
+
+  <!-- DS18B20 -->
+  <rect x="55" y="355" width="245" height="138" class="conn"/>
+  <text x="177" y="384" text-anchor="middle" class="label">J3 — DS18B20</text>
+  <text x="75" y="413" class="small">1: 3V3</text><text x="75" y="438" class="small">2: DQ / GPIO16</text>
+  <text x="75" y="463" class="small">3: GND</text>
+  <path d="M300 413 H365 V448 H425" class="power"/>
+  <path d="M300 438 H345 V314 H425" class="signal"/>
+  <path d="M300 463 H385 V476 H425" class="ground"/>
+  <rect x="135" y="503" width="160" height="42" class="conn"/>
+  <text x="215" y="529" text-anchor="middle" class="small">R1 4.7 kΩ pull-up</text>
+  <path d="M180 503 V485 H300" class="signal"/>
+  <text x="55" y="570" class="tiny">GPIO16 có thể bận trên module có PSRAM.</text>
+
+  <!-- Relay control outputs -->
+  <rect x="870" y="145" width="275" height="195" class="conn"/>
+  <text x="1007" y="174" text-anchor="middle" class="label">J4 — Điều khiển relay/SSR ngoài</text>
+  <text x="890" y="205" class="small">1 HEAT / GPIO25</text>
+  <text x="890" y="230" class="small">2 HUM / GPIO26</text>
+  <text x="890" y="255" class="small">3 FAN / GPIO27</text>
+  <text x="890" y="280" class="small">4 VENT / GPIO14</text>
+  <text x="890" y="310" class="small">5 GND logic (nếu cần)</text>
+  <text x="870" y="365" class="tiny">Tín hiệu active-low theo firmware; xác nhận module 3.3 V.</text>
+  <path d="M775 342 H820 V205 H870" class="signal"/>
+  <path d="M775 342 H830 V230 H870" class="signal"/>
+  <path d="M775 342 H840 V255 H870" class="signal"/>
+  <path d="M775 342 H850 V280 H870" class="signal"/>
+  <path d="M775 476 H845 V310 H870" class="ground"/>
+
+  <!-- Switches -->
+  <rect x="870" y="410" width="275" height="120" class="conn"/>
+  <text x="1007" y="439" text-anchor="middle" class="label">J5 — Công tắc khô (chưa xử lý firmware)</text>
+  <text x="890" y="468" class="small">HOME GPIO18 · END GPIO19</text>
+  <text x="890" y="493" class="small">DOOR GPIO13 · COM → GND</text>
+  <text x="870" y="553" class="tiny">INPUT_PULLUP; chọn NO/NC sau khi chốt fail-safe.</text>
+  <path d="M775 398 H825 V468 H870" class="signal"/>
+
+  <!-- BTS -->
+  <rect x="55" y="620" width="520" height="125" class="conn"/>
+  <text x="315" y="650" text-anchor="middle" class="label">J6 — BTS7960 module ngoài (connector; module cụ thể TBD)</text>
+  <text x="78" y="681" class="small">RPWM GPIO32 · LPWM GPIO33 · R_EN/L_EN GPIO23</text>
+  <text x="78" y="711" class="small">Logic GND · nguồn motor riêng vào BTS7960 · motor ra BTS7960</text>
+  <path d="M455 370 V610 H420 V620" class="signal"/>
+  <path d="M465 370 V605 H315 V620" class="signal"/>
+  <path d="M475 370 V600 H200 V620" class="signal"/>
+  <path d="M490 476 V590 H540 V620" class="ground"/>
+
+  <!-- Buzzer -->
+  <rect x="700" y="620" width="445" height="125" class="conn"/>
+  <text x="922" y="650" text-anchor="middle" class="label">J7 — Ngõ ra còi (driver TBD)</text>
+  <text x="725" y="682" class="small">GPIO4 → tầng transistor/MOSFET phù hợp → buzzer</text>
+  <text x="725" y="712" class="small">Không nối còi tải lớn trực tiếp vào GPIO.</text>
+  <path d="M775 314 H800 V600 H820 V620" class="signal"/>
+
+  <rect x="650" y="755" width="495" height="42" class="note"/>
+  <text x="665" y="773" class="tiny">Cần xác nhận board ESP32, part/footprint, điện áp-dòng tải, kích thước PCB, connector</text>
+  <text x="665" y="789" class="tiny">và yêu cầu nhà sản xuất trước khi tạo netlist, PCB CAD hoặc Gerber sản xuất.</text>
+</svg>
