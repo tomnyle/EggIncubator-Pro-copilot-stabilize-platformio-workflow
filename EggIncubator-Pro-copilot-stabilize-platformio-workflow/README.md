@@ -82,40 +82,7 @@ A complete IoT solution for automated egg incubation with real-time monitoring a
 
 ## 📐 Wiring Diagram
 
-```
-ESP32 Board
-├── I2C Bus (pins 21, 22)
-│   ├── SHT31 VCC → 3.3V
-│   ├── SHT31 GND → GND
-│   ├── SHT31 SDA → GPIO 21
-│   └── SHT31 SCL → GPIO 22
-│
-├── 1-Wire (GPIO 16; verify availability on your ESP32 module)
-│   ├── DS18B20 VCC → 3.3V
-│   ├── DS18B20 GND → GND
-│   └── DS18B20 DQ → GPIO 16 (with 4.7K pullup)
-│
-├── Relay Outputs (GPIO)
-│   ├── GPIO 25 → Heater SSR
-│   ├── GPIO 26 → Humidifier
-│   ├── GPIO 27 → Circulation Fan
-│   ├── GPIO 14 → Ventilation Fan
-│   └── GPIO 4 → Buzzer
-│
-├── Motor Driver (BTS7960)
-│   ├── GPIO 32 → RPWM
-│   ├── GPIO 33 → LPWM
-│   ├── GPIO 23 → ENABLE
-│
-├── Input Sensors
-│   ├── GPIO 18 → Limit Switch HOME
-│   ├── GPIO 19 → Limit Switch END
-│   └── GPIO 13 → Door Switch
-│
-└── Power
-    ├── 5V → USB Power
-    └── 12V → Motor/Relay Power (separate supply)
-```
+See the detailed, firmware-aligned [hardware wiring diagram](docs/hardware-wiring.md), including low-voltage power and safety notes.
 
 ---
 
