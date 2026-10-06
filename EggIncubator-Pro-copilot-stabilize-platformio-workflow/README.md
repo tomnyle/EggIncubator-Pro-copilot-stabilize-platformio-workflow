@@ -55,7 +55,7 @@ A complete IoT solution for automated egg incubation with real-time monitoring a
 
 ### Sensors
 - **SHT31 Temperature/Humidity Sensor** (I2C, address 0x44)
-- **DS18B20 Temperature Sensor** (1-Wire)
+- **DS18B20 Temperature Sensor** (1-Wire, GPIO 17)
 
 ### Actuators
 - **Heater Control**: SSR Relay (pin 25)
@@ -82,40 +82,7 @@ A complete IoT solution for automated egg incubation with real-time monitoring a
 
 ## 📐 Wiring Diagram
 
-```
-ESP32 Board
-├── I2C Bus (pins 21, 22)
-│   ├── SHT31 VCC → 3.3V
-│   ├── SHT31 GND → GND
-│   ├── SHT31 SDA → GPIO 21
-│   └── SHT31 SCL → GPIO 22
-│
-├── 1-Wire (pin 21 currently, can be changed)
-│   ├── DS18B20 VCC → 3.3V
-│   ├── DS18B20 GND → GND
-│   └── DS18B20 DQ → GPIO 21 (with 4.7K pullup)
-│
-├── Relay Outputs (GPIO)
-│   ├── GPIO 25 → Heater SSR
-│   ├── GPIO 26 → Humidifier
-│   ├── GPIO 27 → Circulation Fan
-│   ├── GPIO 14 → Ventilation Fan
-│   └── GPIO 4 → Buzzer
-│
-├── Motor Driver (BTS7960)
-│   ├── GPIO 32 → RPWM
-│   ├── GPIO 33 → LPWM
-│   ├── GPIO 23 → ENABLE
-│
-├── Input Sensors
-│   ├── GPIO 18 → Limit Switch HOME
-│   ├── GPIO 19 → Limit Switch END
-│   └── GPIO 13 → Door Switch
-│
-└── Power
-    ├── 5V → USB Power
-    └── 12V → Motor/Relay Power (separate supply)
-```
+See the [low-voltage hardware schematic](hardware/wiring-schematic.md) for the complete connection diagram, pin map, power domains, and safety notes. The DS18B20 uses a dedicated GPIO 17 data line; it must not share the SHT31 I²C SDA line.
 
 ---
 
@@ -181,6 +148,7 @@ Edit `include/pins.h` to change hardware pins:
 ```cpp
 #define PIN_I2C_SDA          21    // I2C Data
 #define PIN_I2C_SCL          22    // I2C Clock
+#define PIN_DS18B20_DATA     17    // 1-Wire data (4.7 kΩ pull-up to 3.3 V)
 
 #define PIN_HEATER_SSR       25    // Heater
 #define PIN_HUMIDIFIER       26    // Humidifier
@@ -357,7 +325,7 @@ homeassistant/sensor/eggincubator01/egg_temperature/config
 - Look for: `✗ SHT31 NOT FOUND`
 
 **DS18B20 (1-Wire)**:
-- Verify 1-Wire pin connection (currently pin 21)
+- Verify 1-Wire pin connection (GPIO 17)
 - Check 4.7K pullup resistor
 - Look for: `✗ DS18B20 NOT FOUND`
 
