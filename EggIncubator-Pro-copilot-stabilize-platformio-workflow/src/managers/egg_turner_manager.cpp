@@ -34,12 +34,16 @@ void EggTurnerManager::begin()
     Logger::info("--------------------------------");
 
     // Setup motor pins
+    digitalWrite(motorLeftPin, LOW);
+    digitalWrite(motorRightPin, LOW);
     pinMode(motorLeftPin, OUTPUT);
     pinMode(motorRightPin, OUTPUT);
+    pinMode(PIN_MOTOR_ENABLE, OUTPUT);
 
     // Ensure motor is stopped
     digitalWrite(motorLeftPin, LOW);
     digitalWrite(motorRightPin, LOW);
+    digitalWrite(PIN_MOTOR_ENABLE, LOW);
 
     Logger::info(
         ("Turning Interval: " + String(turningIntervalMs / 60000.0f, 1) + " minutes").c_str());
@@ -244,7 +248,9 @@ void EggTurnerManager::performTurn()
     TurnDirection nextDirection = getOppositeTurnDirection(lastTurnDirection);
 
     // Start motor
+    digitalWrite(PIN_MOTOR_ENABLE, LOW);
     setMotorDirection(nextDirection);
+    digitalWrite(PIN_MOTOR_ENABLE, HIGH);
     turnerRunning = true;
     turnStartTime = millis();
 
@@ -262,6 +268,7 @@ void EggTurnerManager::performTurn()
 
 void EggTurnerManager::stopTurner()
 {
+    digitalWrite(PIN_MOTOR_ENABLE, LOW);
     digitalWrite(motorLeftPin, LOW);
     digitalWrite(motorRightPin, LOW);
 
