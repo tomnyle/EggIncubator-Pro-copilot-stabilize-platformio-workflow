@@ -3,23 +3,23 @@
 **Date**: July 26, 2026  
 **Project**: Smart Egg Incubator with Home Assistant Integration  
 **Version**: 0.3.0  
-**Status**: ✅ **CORE FEATURES COMPLETE** (95% Complete)
+**Status**: **Development build — hardware validation required before production**
 
 ---
 
 ## 📈 Overall Progress
 
 ```
-████████████████████░  95% Complete
+Core firmware implemented; safety, security, and hardware validation remain.
 ```
 
 | Category | Status | Progress |
 |----------|--------|----------|
-| **Core Hardware Control** | ✅ Complete | 100% |
-| **Sensor Integration** | ✅ Complete | 100% |
-| **Network & MQTT** | ✅ Complete | 100% |
-| **Home Assistant Integration** | ✅ Complete | 100% |
-| **Documentation** | ✅ Complete | 100% |
+| **Core Hardware Control** | Implemented; hardware validation pending | — |
+| **Sensor Integration** | Implemented; calibration pending | — |
+| **Network & MQTT** | Implemented; deployment security pending | — |
+| **Home Assistant Integration** | Implemented; integration validation pending | — |
+| **Documentation** | In progress | — |
 | **Advanced Features** | 🔄 In Progress | 50% |
 | **Testing & Optimization** | ⏳ Planned | 0% |
 
@@ -316,13 +316,13 @@ main.cpp
 
 ## 📝 Configuration Guide Quick Reference
 
-### WiFi Setup (app_config.h)
+### WiFi Setup (local include/secrets.h)
 ```cpp
 #define WIFI_SSID        "Your_WiFi"
 #define WIFI_PASSWORD    "Your_Password"
 ```
 
-### MQTT Setup (app_config.h)
+### MQTT Setup (local include/secrets.h)
 ```cpp
 #define MQTT_HOST        "192.168.1.100"
 #define MQTT_USERNAME    "mqtt_user"
@@ -379,7 +379,7 @@ main.cpp
 - 📚 **Well Documented** - Comprehensive guides & examples
 - 🔄 **Reliable** - Auto-reconnect, error handling
 - ⚡ **Efficient** - Optimized task scheduling
-- 🎯 **Production Ready** - 95% complete core functionality
+- ⚠️ **Not production-ready** - requires hardware, thermal-safety, and network-security validation
 
 ---
 
@@ -434,7 +434,7 @@ main.cpp
 
 ## 🎉 CONCLUSION
 
-**EggIncubator Pro** is **95% complete** with all core features implemented and working:
+**EggIncubator Pro** has core features implemented, but they have not been validated for production:
 
 ✅ Hardware control fully functional  
 ✅ Sensors reading temperature and humidity  
@@ -448,7 +448,7 @@ main.cpp
 - ✅ Home Assistant automation setup
 - ✅ Further enhancements
 
-**Project Status: PRODUCTION-READY (Core Features)**
+**Project Status: Development build; production release is blocked on hardware and safety validation.**
 
 ---
 

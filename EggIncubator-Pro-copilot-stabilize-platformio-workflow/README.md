@@ -2,7 +2,9 @@
 
 **Smart Egg Incubator with Home Assistant Integration**
 
-A complete IoT solution for automated egg incubation with real-time monitoring and control via Home Assistant MQTT.
+An IoT incubator controller with sensor monitoring and Home Assistant MQTT integration.
+
+> **Production warning:** This firmware has not been validated on the target hardware. Verify relay polarity, sensor calibration, thermal cutoffs, motor limits, and failure behavior before connecting a heater or eggs. MQTT currently uses unencrypted TCP; do not expose it to untrusted networks.
 
 ---
 
@@ -90,10 +92,10 @@ ESP32 Board
 │   ├── SHT31 SDA → GPIO 21
 │   └── SHT31 SCL → GPIO 22
 │
-├── 1-Wire (pin 21 currently, can be changed)
+├── 1-Wire (GPIO 16)
 │   ├── DS18B20 VCC → 3.3V
 │   ├── DS18B20 GND → GND
-│   └── DS18B20 DQ → GPIO 21 (with 4.7K pullup)
+│   └── DS18B20 DQ → GPIO 16 (with 4.7K pullup)
 │
 ├── Relay Outputs (GPIO)
 │   ├── GPIO 25 → Heater SSR
@@ -141,22 +143,13 @@ PlatformIO will automatically install libraries from `platformio.ini`:
 - ArduinoJson (JSON serialization)
 
 ### 4. Configure WiFi & MQTT
-Edit `include/app_config.h`:
+Create an ignored local configuration file and fill in the device credentials:
 
-```cpp
-// WiFi Configuration
-#define WIFI_SSID            "Your_WiFi_SSID"
-#define WIFI_PASSWORD        "Your_WiFi_Password"
-
-// MQTT Configuration
-#define MQTT_HOST            "192.168.100.100"  // MQTT Broker IP
-#define MQTT_PORT            1883
-#define MQTT_USERNAME        "mqtt_user"
-#define MQTT_PASSWORD        "mqtt_password"
-
-// Device Configuration
-#define DEVICE_ID            "eggincubator01"
+```bash
+cp include/secrets.example.h include/secrets.h
 ```
+
+`include/secrets.h` is excluded from Git. If no credentials are configured, the device stays offline. Rotate any credentials that were previously committed; removing them from the current source does not remove them from Git history.
 
 ### 5. Build & Upload
 ```bash
@@ -181,6 +174,7 @@ Edit `include/pins.h` to change hardware pins:
 ```cpp
 #define PIN_I2C_SDA          21    // I2C Data
 #define PIN_I2C_SCL          22    // I2C Clock
+#define PIN_DS18B20          16    // 1-Wire data (4.7K pull-up)
 
 #define PIN_HEATER_SSR       25    // Heater
 #define PIN_HUMIDIFIER       26    // Humidifier
@@ -323,7 +317,7 @@ homeassistant/sensor/eggincubator01/egg_temperature/config
 
 ### WiFi Connection Issues
 **Problem**: Device won't connect to WiFi
-- Check WiFi SSID and password in `app_config.h`
+- Check WiFi SSID and password in the local `include/secrets.h`
 - Verify WiFi is 2.4GHz (ESP32 doesn't support 5GHz)
 - Check serial log: `[WARNING] WiFi Disconnected`
 
@@ -357,7 +351,7 @@ homeassistant/sensor/eggincubator01/egg_temperature/config
 - Look for: `✗ SHT31 NOT FOUND`
 
 **DS18B20 (1-Wire)**:
-- Verify 1-Wire pin connection (currently pin 21)
+- Verify 1-Wire pin connection (GPIO 16)
 - Check 4.7K pullup resistor
 - Look for: `✗ DS18B20 NOT FOUND`
 
@@ -383,7 +377,7 @@ homeassistant/sensor/eggincubator01/egg_temperature/config
 EggIncubator-Pro/
 │
 ├── include/                    # Header files
-│   ├── app_config.h           # WiFi & MQTT configuration
+│   ├── app_config.h           # Firmware and device configuration
 │   ├── pins.h                 # Hardware pin definitions
 │   ├── system_state.h         # Global state structures
 │   ├── gpio_manager.h         # GPIO initialization
