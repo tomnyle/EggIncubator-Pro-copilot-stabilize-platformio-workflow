@@ -1,6 +1,6 @@
 # EggIncubator Pro — Low-Voltage Wiring Schematic
 
-This schematic documents the firmware pin map in `include/pins.h` and expands it with four PC817 relay-control channels and output pull-ups, a buzzer transistor driver, a fused 12 V-to-5 V converter interface with bulk capacitors, and an auxiliary sensor header. It remains a module-level reference, not a production PCB or mains-wiring drawing.
+This schematic is derived from the firmware pin map in `include/pins.h` and the hardware interfaces described by the project; it does not depend on the reference image. It covers four PC817 relay-control channels and output pull-ups, a buzzer transistor driver, a fused 12 V-to-5 V converter interface with bulk capacitors, and an auxiliary sensor header. It remains a module-level reference, not a production PCB or mains-wiring drawing.
 
 ```mermaid
 flowchart LR
@@ -27,7 +27,7 @@ flowchart LR
     subgraph SENSORS["Sensors"]
         SHT["SHT31<br/>I²C address 0x44"]
         DS["DS18B20"]
-        RPU["4.7 kΩ pull-up"]
+        DS_RPU["4.7 kΩ pull-up"]
         RSDA["Optional 4.7 kΩ SDA pull-up"]
         RSCL["Optional 4.7 kΩ SCL pull-up"]
     end
@@ -39,7 +39,10 @@ flowchart LR
         RV["Ventilation fan module IN"]
         RGV["External relay supply"]
         RGG["External relay ground"]
-        RPU["4 × 4.7 kΩ CTRL pull-ups"]
+        RPU_H["4.7 kΩ heater CTRL pull-up"]
+        RPU_HU["4.7 kΩ humidifier CTRL pull-up"]
+        RPU_CF["4.7 kΩ circulation fan CTRL pull-up"]
+        RPU_VF["4.7 kΩ vent fan CTRL pull-up"]
     end
 
     subgraph OPTO["PC817 channels (4x), open-collector outputs"]
@@ -73,6 +76,7 @@ flowchart LR
     FUSE["F1 load-rated fuse"]
     CIN["C1 470 µF / 25 V"]
     COUT["C2 470 µF / 10 V"]
+    POWER_GND["Power return / GND"]
     V5["5 V to ESP32 DevKit VIN"]
     AUX["Auxiliary sensor header<br/>I²C + reserved ADC nets"]
     STATUS["Optional LED + series resistor"]
@@ -91,8 +95,8 @@ flowchart LR
     GND ---|GND| SHT
 
     DS_PIN <-->|DQ| DS
-    DS_PIN --- RPU
-    RPU --- V3
+    DS_PIN --- DS_RPU
+    DS_RPU --- V3
     V3 -->|VDD| DS
     GND ---|GND| DS
 
@@ -104,11 +108,10 @@ flowchart LR
     OHU -->|open collector| RHU
     OF -->|open collector| RF
     OV -->|open collector| RV
-    RGV --> RPU
-    RPU --> RH
-    RPU --> RHU
-    RPU --> RF
-    RPU --> RV
+    RGV --> RPU_H --> RH
+    RGV --> RPU_HU --> RHU
+    RGV --> RPU_CF --> RF
+    RGV --> RPU_VF --> RV
     RGG --- OH
     RGG --- OHU
     RGG --- OF
@@ -130,8 +133,10 @@ flowchart LR
     BUZZ --> QBUZ --> BUZZER
     LED --> STATUS
     VIN --> FUSE --> BUCK --> V5
-    CIN --- BUCK
+    BUCK --- CIN
+    CIN --- POWER_GND
     COUT --- V5
+    COUT --- POWER_GND
     V3 --> AUX
     I2C_SDA --- AUX
     I2C_SCL --- AUX
@@ -154,7 +159,7 @@ flowchart LR
 | Auxiliary sensors | J8 exposes 3V3, GND, SDA, SCL, and two reserved ADC nets | ADC nets are not assigned to firmware GPIOs yet; check sensor voltage before connecting |
 | Status LED | GPIO 2 through R13 (1 kΩ) and D1 to GND | GPIO 2 is a boot-strapping pin; ensure the LED circuit does not prevent boot |
 
-- J9/F1/U9/J10 show a 12 V DC input, series fuse, generic buck module, and 5 V DevKit input. C1/C2 show illustrative 470 µF bulk decoupling; validate voltage, ripple, inrush, fuse, and converter current ratings for the actual design. Do not connect USB and external 5 V together unless the selected DevKit allows it.
+- J9/F1/U9/J10 show a 12 V DC input, series fuse, generic buck module, and 5 V DevKit input. C1/C2 show illustrative 470 µF bulk decoupling to GND; validate voltage, ripple, inrush, fuse, and converter current ratings for the actual design. Do not connect USB and external 5 V together unless the selected DevKit allows it.
 - Relay channels are active-low: a LOW GPIO turns on its PC817 LED. Each open-collector output has a 4.7 kΩ pull-up to the isolated `RELAY_VCC` rail and is pulled low by its PC817. Choose the relay-side supply to match the input module; verify optocoupler sink current and logic thresholds. Keep `RELAY_GND` separate from MCU GND.
 - The 330 Ω input resistors provide roughly 6 mA LED current from a 3.3 V rail with a typical PC817 LED drop. Verify worst-case PC817 CTR/output sink current against the actual relay/SSR input; use an additional suitable driver if it is insufficient. The schematic does not guarantee compatibility with arbitrary modules.
 - Sensor power is 3.3 V only for sensors rated for it. J8's ADC nets are reserved; select safe ESP32 ADC pins and update firmware before using them.
