@@ -1,6 +1,6 @@
 # EggIncubator Pro — Low-Voltage Wiring Schematic
 
-This schematic is derived from the firmware pin map in `include/pins.h` and the hardware interfaces described by the project; it does not depend on the reference image. It covers four PC817 relay-control channels and output pull-ups, a buzzer transistor driver, a fused 12 V-to-5 V converter interface with bulk capacitors, and an auxiliary sensor header. It remains a module-level reference, not a production PCB or mains-wiring drawing.
+This schematic is derived from the firmware pin map in `include/pins.h` and the hardware interfaces described by the project; it does not depend on the reference image. U1 is shown as a symbolic ESP32 DevKit V1 module interface, with project-used GPIO functions and a 5 V VIN connection; it is not a bare ESP32 chip or the exact physical pinout of every DevKit variant. The drawing also covers four PC817 relay-control channels and output pull-ups, a buzzer transistor driver, a fused 12 V-to-5 V converter interface with bulk capacitors, and an auxiliary sensor header. It remains a module-level reference, not a production PCB or mains-wiring drawing.
 
 ```mermaid
 flowchart LR
@@ -164,7 +164,8 @@ flowchart LR
 | Auxiliary sensors | J8 exposes 3V3, GND, SDA, SCL, and two reserved ADC nets | ADC nets are not assigned to firmware GPIOs yet; check sensor voltage before connecting |
 | Status LED | GPIO 2 through R13 (1 kΩ) and D1 to GND | GPIO 2 is a boot-strapping pin; ensure the LED circuit does not prevent boot |
 
-- J9/F1/U9/J10 show a 12 V DC input, series fuse, generic buck module, and 5 V DevKit input. C1/C2 show illustrative 470 µF bulk decoupling to GND; validate voltage, ripple, inrush, fuse, and converter current ratings for the actual design. Do not connect USB and external 5 V together unless the selected DevKit allows it.
+- U1 is a schematic symbol for an ESP32 DevKit V1 module interface, not a board-specific footprint. GPIO assignments follow the firmware; verify the physical board's pin labels and VIN/USB power arrangement before wiring.
+- J9/F1/U9/J10 show a 12 V DC input, series fuse, generic buck module, and 5 V `DEVKIT_5V` input. C1/C2 show illustrative 470 µF bulk decoupling to GND; validate voltage, ripple, inrush, fuse, and converter current ratings for the actual design. Do not connect USB and external 5 V together unless the selected DevKit allows it.
 - Relay channels are active-low: a LOW GPIO turns on its PC817 LED. Each open-collector output has a 4.7 kΩ pull-up to the isolated `RELAY_VCC` rail and is pulled low by its PC817. Choose the relay-side supply to match the input module; verify optocoupler sink current and logic thresholds. Keep `RELAY_GND` separate from MCU GND.
 - The 330 Ω input resistors provide roughly 6 mA LED current from a 3.3 V rail with a typical PC817 LED drop. Verify worst-case PC817 CTR/output sink current against the actual relay/SSR input; use an additional suitable driver if it is insufficient. The schematic does not guarantee compatibility with arbitrary modules.
 - Sensor power is 3.3 V only for sensors rated for it. J8's ADC nets are reserved; select safe ESP32 ADC pins and update firmware before using them.
