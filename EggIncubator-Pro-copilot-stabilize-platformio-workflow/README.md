@@ -82,7 +82,7 @@ A complete IoT solution for automated egg incubation with real-time monitoring a
 
 ## 📐 Wiring Diagram
 
-Open the editable [KiCad schematic](hardware/eggincubator-pro.kicad_sch) in KiCad to inspect the connector-level circuit and named nets. The [wiring notes](hardware/wiring-schematic.md) provide connection and safety details. The DS18B20 uses a dedicated GPIO 17 data line; it must not share the SHT31 I²C SDA line.
+Open the editable [KiCad schematic](hardware/eggincubator-pro.kicad_sch) in KiCad to inspect the ESP32 pin map, four PC817 relay-control channels, buzzer transistor driver, buck-module interface, and sensor/module headers. The [wiring notes](hardware/wiring-schematic.md) explain isolation, module compatibility, and safety limits. The DS18B20 uses dedicated GPIO 17; it does not share the SHT31 I²C SDA line. This is a module-level reference, not a fabrication-ready PCB: exact module footprints, load/fuse ratings, PCB layout, and electrical safety review are still required.
 
 ---
 
