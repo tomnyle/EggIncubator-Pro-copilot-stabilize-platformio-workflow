@@ -1,6 +1,6 @@
 # EggIncubator Pro — Low-Voltage Wiring Schematic
 
-This schematic documents the firmware pin map in `include/pins.h` and expands it with four PC817 relay-control channels, a buzzer transistor driver, a generic 12 V-to-5 V converter interface, and an auxiliary sensor header. It remains a module-level reference, not a production PCB or mains-wiring drawing.
+This schematic documents the firmware pin map in `include/pins.h` and expands it with four PC817 relay-control channels and output pull-ups, a buzzer transistor driver, a fused 12 V-to-5 V converter interface with bulk capacitors, and an auxiliary sensor header. It remains a module-level reference, not a production PCB or mains-wiring drawing.
 
 ```mermaid
 flowchart LR
@@ -28,6 +28,8 @@ flowchart LR
         SHT["SHT31<br/>I²C address 0x44"]
         DS["DS18B20"]
         RPU["4.7 kΩ pull-up"]
+        RSDA["Optional 4.7 kΩ SDA pull-up"]
+        RSCL["Optional 4.7 kΩ SCL pull-up"]
     end
 
     subgraph RELAYS["External relay / SSR modules"]
@@ -37,6 +39,7 @@ flowchart LR
         RV["Ventilation fan module IN"]
         RGV["External relay supply"]
         RGG["External relay ground"]
+        RPU["4 × 4.7 kΩ CTRL pull-ups"]
     end
 
     subgraph OPTO["PC817 channels (4x), open-collector outputs"]
@@ -67,6 +70,9 @@ flowchart LR
     QBUZ["PN2222A low-side switch<br/>1 kΩ base resistor"]
     BUCK["12 V to 5 V buck module"]
     VIN["12 V DC input"]
+    FUSE["F1 load-rated fuse"]
+    CIN["C1 470 µF / 25 V"]
+    COUT["C2 470 µF / 10 V"]
     V5["5 V to ESP32 DevKit VIN"]
     AUX["Auxiliary sensor header<br/>I²C + reserved ADC nets"]
     STATUS["Optional LED + series resistor"]
@@ -79,6 +85,8 @@ flowchart LR
 
     I2C_SDA <-->|SDA| SHT
     I2C_SCL <-->|SCL| SHT
+    V3 --> RSDA --> I2C_SDA
+    V3 --> RSCL --> I2C_SCL
     V3 -->|VCC| SHT
     GND ---|GND| SHT
 
@@ -96,10 +104,11 @@ flowchart LR
     OHU -->|open collector| RHU
     OF -->|open collector| RF
     OV -->|open collector| RV
-    RGV --- RH
-    RGV --- RHU
-    RGV --- RF
-    RGV --- RV
+    RGV --> RPU
+    RPU --> RH
+    RPU --> RHU
+    RPU --> RF
+    RPU --> RV
     RGG --- OH
     RGG --- OHU
     RGG --- OF
@@ -112,6 +121,7 @@ flowchart LR
     GND --- BG
     BG --- BRIDGE
     MOTOR_SUPPLY --> VM --> BRIDGE
+    GND --- MOTOR_SUPPLY
     BRIDGE --> MOUT --> MOTOR_LOAD
 
     HOME --- SH --- GND
@@ -119,7 +129,9 @@ flowchart LR
     DOOR --- SD --- GND
     BUZZ --> QBUZ --> BUZZER
     LED --> STATUS
-    VIN --> BUCK --> V5
+    VIN --> FUSE --> BUCK --> V5
+    CIN --- BUCK
+    COUT --- V5
     V3 --> AUX
     I2C_SDA --- AUX
     I2C_SCL --- AUX
@@ -140,12 +152,13 @@ flowchart LR
 | Door switch | GPIO 13 | Dry contact to GND; firmware uses `INPUT_PULLUP` |
 | Buzzer | GPIO 4 through R6 (1 kΩ) to PN2222A base | J7 supplies the buzzer from 5 V; confirm module voltage/current rating |
 | Auxiliary sensors | J8 exposes 3V3, GND, SDA, SCL, and two reserved ADC nets | ADC nets are not assigned to firmware GPIOs yet; check sensor voltage before connecting |
-| Status LED (optional) | GPIO 2 | Add a series resistor; GPIO 2 is a boot-strapping pin, so ensure external circuitry does not prevent boot |
+| Status LED | GPIO 2 through R13 (1 kΩ) and D1 to GND | GPIO 2 is a boot-strapping pin; ensure the LED circuit does not prevent boot |
 
-- J9/U9/J10 show an optional 12 V DC input, generic buck module, and 5 V DevKit input. Verify the selected converter's voltage, current, polarity, and fuse requirements. Do not connect USB and external 5 V together unless the selected DevKit allows it.
-- Relay channels are active-low: a LOW GPIO turns on its PC817 LED. The output side is an open-collector sink; connect each external relay input and its relay-side supply/ground as required by that module. Keep `RELAY_GND` separate from MCU GND if isolation is required.
+- J9/F1/U9/J10 show a 12 V DC input, series fuse, generic buck module, and 5 V DevKit input. C1/C2 show illustrative 470 µF bulk decoupling; validate voltage, ripple, inrush, fuse, and converter current ratings for the actual design. Do not connect USB and external 5 V together unless the selected DevKit allows it.
+- Relay channels are active-low: a LOW GPIO turns on its PC817 LED. Each open-collector output has a 4.7 kΩ pull-up to the isolated `RELAY_VCC` rail and is pulled low by its PC817. Choose the relay-side supply to match the input module; verify optocoupler sink current and logic thresholds. Keep `RELAY_GND` separate from MCU GND.
 - The 330 Ω input resistors provide roughly 6 mA LED current from a 3.3 V rail with a typical PC817 LED drop. Verify worst-case PC817 CTR/output sink current against the actual relay/SSR input; use an additional suitable driver if it is insufficient. The schematic does not guarantee compatibility with arbitrary modules.
 - Sensor power is 3.3 V only for sensors rated for it. J8's ADC nets are reserved; select safe ESP32 ADC pins and update firmware before using them.
-- Keep the motor supply separate from the ESP32 USB supply. Connect the driver logic ground to ESP32 GND; observe the driver board's power-input and grounding instructions.
+- R11/R12 provide optional 4.7 kΩ I²C pull-ups and are marked DNP; populate only if the connected sensor modules do not already provide suitable pull-ups.
+- Keep the motor supply positive separate from the ESP32 USB supply. A typical BTS7960 module has common logic and motor return; J5 therefore connects both grounds to system GND. Confirm this against the exact driver board before wiring.
 - Heater and other load-side wiring is intentionally not specified: the project does not identify load voltages, currents, or exact relay/SSR models. Use correctly rated, isolated switching devices, appropriate fusing/enclosures, and qualified mains wiring where applicable. Never connect mains voltage to the ESP32 or low-voltage side.
 - Converter and connector footprints, load-dependent fuse ratings, PCB placement/routing, creepage/clearance, thermal design, and DRC remain to be completed after exact modules and loads are selected. This schematic is not ready for PCB fabrication.
