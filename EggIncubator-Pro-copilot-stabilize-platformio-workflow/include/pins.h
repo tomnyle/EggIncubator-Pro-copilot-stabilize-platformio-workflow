@@ -18,7 +18,7 @@
  *********************************************************************/
 #define PIN_I2C_SDA              21
 #define PIN_I2C_SCL              22
-// 1-Wire data; requires a 4.7 kΩ pull-up to 3.3 V.
+// Dedicated 1-Wire data; requires a 4.7 kΩ pull-up to 3.3 V. Do not also use GPIO17 for UART2 TX.
 #define PIN_DS18B20_DATA         17
 
 /**********************************************************************

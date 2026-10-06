@@ -148,7 +148,7 @@ Edit `include/pins.h` to change hardware pins:
 ```cpp
 #define PIN_I2C_SDA          21    // I2C Data
 #define PIN_I2C_SCL          22    // I2C Clock
-#define PIN_DS18B20_DATA     17    // 1-Wire data (4.7 kΩ pull-up to 3.3 V)
+#define PIN_DS18B20_DATA     17    // Dedicated 1-Wire (4.7 kΩ pull-up to 3.3 V; don't use as UART2 TX)
 
 #define PIN_HEATER_SSR       25    // Heater
 #define PIN_HUMIDIFIER       26    // Humidifier
