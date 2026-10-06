@@ -82,40 +82,7 @@ A complete IoT solution for automated egg incubation with real-time monitoring a
 
 ## 📐 Wiring Diagram
 
-```
-ESP32 Board
-├── I2C Bus (pins 21, 22)
-│   ├── SHT31 VCC → 3.3V
-│   ├── SHT31 GND → GND
-│   ├── SHT31 SDA → GPIO 21
-│   └── SHT31 SCL → GPIO 22
-│
-├── 1-Wire (pin 21 currently, can be changed)
-│   ├── DS18B20 VCC → 3.3V
-│   ├── DS18B20 GND → GND
-│   └── DS18B20 DQ → GPIO 21 (with 4.7K pullup)
-│
-├── Relay Outputs (GPIO)
-│   ├── GPIO 25 → Heater SSR
-│   ├── GPIO 26 → Humidifier
-│   ├── GPIO 27 → Circulation Fan
-│   ├── GPIO 14 → Ventilation Fan
-│   └── GPIO 4 → Buzzer
-│
-├── Motor Driver (BTS7960)
-│   ├── GPIO 32 → RPWM
-│   ├── GPIO 33 → LPWM
-│   ├── GPIO 23 → ENABLE
-│
-├── Input Sensors
-│   ├── GPIO 18 → Limit Switch HOME
-│   ├── GPIO 19 → Limit Switch END
-│   └── GPIO 13 → Door Switch
-│
-└── Power
-    ├── 5V → USB Power
-    └── 12V → Motor/Relay Power (separate supply)
-```
+See the detailed, firmware-aligned [hardware wiring diagram](docs/hardware-wiring.md), including [schematic](docs/eggincubator-schematic-concept.svg) and [PCB placement](docs/eggincubator-pcb-placement-concept.svg) concept drafts. These are not manufacturing files.
 
 ---
 
@@ -141,22 +108,9 @@ PlatformIO will automatically install libraries from `platformio.ini`:
 - ArduinoJson (JSON serialization)
 
 ### 4. Configure WiFi & MQTT
-Edit `include/app_config.h`:
+Copy `include/secrets.h.example` to the ignored local file `include/secrets.h`, then set your own WiFi and MQTT values there. Do not commit this file; rotate credentials that were previously committed to the repository.
 
-```cpp
-// WiFi Configuration
-#define WIFI_SSID            "Your_WiFi_SSID"
-#define WIFI_PASSWORD        "Your_WiFi_Password"
-
-// MQTT Configuration
-#define MQTT_HOST            "192.168.100.100"  // MQTT Broker IP
-#define MQTT_PORT            1883
-#define MQTT_USERNAME        "mqtt_user"
-#define MQTT_PASSWORD        "mqtt_password"
-
-// Device Configuration
-#define DEVICE_ID            "eggincubator01"
-```
+The firmware remains disconnected from WiFi until a non-empty SSID is configured. `include/app_config.h` contains non-secret device defaults.
 
 ### 5. Build & Upload
 ```bash
@@ -170,6 +124,12 @@ pio run --target upload
 ```bash
 pio device monitor --baud 115200
 ```
+
+> GPIO 16 is used for the DS18B20 data line so it no longer conflicts with I²C GPIO 21. Check your exact ESP32 module: GPIO 16 may be reserved on modules with PSRAM. Relay outputs are configured active-low; verify the relay board polarity and confirm all loads remain off during reset and power loss.
+
+## Production Readiness
+
+This repository is a prototype and has not been qualified for unattended or commercial production. Before incubating eggs or connecting mains-powered heaters, verify the board pinout, relay/SSR ratings and polarity, independent thermal cutoff, wiring and enclosure safety, sensor calibration, control-loop behavior, and recovery from sensor/network/power failures. Run PlatformIO builds and unit/integration tests (none are currently defined under `test/`), then perform supervised hardware endurance and fault-injection tests. Software safeguards do not replace independent hardware protection or applicable electrical/product-safety certification.
 
 ---
 

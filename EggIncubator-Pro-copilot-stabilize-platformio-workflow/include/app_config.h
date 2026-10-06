@@ -1,6 +1,10 @@
 #ifndef APP_CONFIG_H
 #define APP_CONFIG_H
 
+#if __has_include("secrets.h")
+#include "secrets.h"
+#endif
+
 /********************************************************
  * EggIncubator Pro Configuration
  ********************************************************/
@@ -12,26 +16,39 @@
 
 
 // Device
+#ifndef DEVICE_ID
 #define DEVICE_ID            "eggincubator01"
+#endif
 
 
 // WiFi
-#define WIFI_SSID            "Le Danh"
-#define WIFI_PASSWORD        "123456789"
+#ifndef WIFI_SSID
+#define WIFI_SSID            ""
+#endif
+#ifndef WIFI_PASSWORD
+#define WIFI_PASSWORD        ""
+#endif
 
 
 // MQTT
-#define MQTT_HOST            "192.168.100.168"
+#ifndef MQTT_HOST
+#define MQTT_HOST            "0.0.0.0"
+#endif
+#ifndef MQTT_USERNAME
+#define MQTT_USERNAME        ""
+#endif
+#ifndef MQTT_PASSWORD
+#define MQTT_PASSWORD        ""
+#endif
+#ifndef MQTT_PORT
 #define MQTT_PORT            1883
-
-#define MQTT_USERNAME        "homer"
-#define MQTT_PASSWORD        "Danh@@@1992"
+#endif
 
 
 // MQTT Topic Root
-
+#ifndef MQTT_ROOT_TOPIC
 #define MQTT_ROOT_TOPIC      "eggincubator"
-
+#endif
 
 
 #endif

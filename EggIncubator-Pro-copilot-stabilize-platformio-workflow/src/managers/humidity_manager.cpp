@@ -41,17 +41,19 @@ void HumidityManager::begin()
 
 void HumidityManager::update()
 {
+    if (!SensorManager::isSHT31ReadingValid())
+    {
+        RelayController::humidifier(false);
+        humidifierRunning = false;
+        return;
+    }
+
     if (!controlEnabled)
     {
         return;
     }
 
     currentHumidity = SensorManager::getAirHumidity();
-
-    if (currentHumidity < 0 || !SensorManager::isSHT31Ready())
-    {
-        return;
-    }
 
     const float error = targetHumidity - currentHumidity;
     applyHumidifierControl(error);

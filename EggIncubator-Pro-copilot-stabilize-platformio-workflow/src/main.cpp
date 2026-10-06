@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <math.h>
 #include "logger.h"
+#include "gpio_manager.h"
+#include "sensor_manager.h"
 #include "managers/temperature_manager.h"
 #include "managers/humidity_manager.h"
 #include "managers/egg_turner_manager.h"
@@ -28,22 +30,30 @@ void setup()
     Logger::begin(115200);
     Serial.println("[BOOT] logger started");
 
-    Serial.println("[BOOT] network.begin()");
-    network.begin();
-
-    Serial.println("[BOOT] mqtt.begin()");
-    mqtt.begin();
-
+    GPIOManager::begin();
     RelayController::begin();
+    SensorManager::begin();
     TemperatureManager::begin();
     HumidityManager::begin();
     EggTurnerManager::begin();
+
+    if (SensorManager::isSHT31Ready())
+    {
+        TemperatureManager::enable();
+        HumidityManager::enable();
+    }
 
     // Default profile: CHICKEN
     IncubationProfile::begin(IncubationProfileType::CHICKEN, millis());
 
     // Apply one-time initial profile values
     applyProfileControl();
+
+    Serial.println("[BOOT] network.begin()");
+    network.begin();
+
+    Serial.println("[BOOT] mqtt.begin()");
+    mqtt.begin();
 
     lastUpdateTime = millis();
     Serial.println("[BOOT] Initialization done.");
@@ -60,6 +70,13 @@ void loop()
 
     network.loop();
     mqtt.loop();
+    SensorManager::update();
+
+    if (!SensorManager::isSHT31ReadingValid())
+    {
+        RelayController::heater(false);
+        RelayController::humidifier(false);
+    }
 
     uint32_t now = millis();
     if (now - lastUpdateTime >= updateInterval)

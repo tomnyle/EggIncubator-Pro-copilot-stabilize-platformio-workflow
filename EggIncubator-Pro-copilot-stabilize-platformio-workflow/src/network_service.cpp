@@ -56,6 +56,12 @@ void NetworkService::loop()
 
 void NetworkService::connectWiFi()
 {
+    if (WIFI_SSID[0] == '\0')
+    {
+        Logger::error("WiFi credentials not configured; add include/secrets.h");
+        return;
+    }
+
     Logger::info("--------------------------------");
     Logger::info("Connecting WiFi...");
     Logger::info("--------------------------------");

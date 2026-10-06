@@ -2,6 +2,7 @@
 #include "pins.h"
 #include "logger.h"
 #include "system_state.h"
+#include <Wire.h>
 
 /******************************************************
  * Static Variable Initialization
@@ -9,7 +10,7 @@
 
 Adafruit_SHT31 SensorManager::sht31;
 
-OneWire SensorManager::oneWire(PIN_I2C_SDA);  // OneWire on same pin for now
+OneWire SensorManager::oneWire(PIN_ONEWIRE);
 
 DallasTemperature SensorManager::ds18b20(&SensorManager::oneWire);
 
@@ -18,6 +19,7 @@ float SensorManager::airHumidity = 0.0f;
 float SensorManager::eggTemp = 0.0f;
 
 bool SensorManager::sht31Ready = false;
+bool SensorManager::sht31ReadingValid = false;
 bool SensorManager::ds18b20Ready = false;
 
 unsigned long SensorManager::lastSHT31Update = 0;
@@ -36,6 +38,8 @@ void SensorManager::begin()
     Logger::info("Initializing Sensor Manager");
     Logger::info("--------------------------------");
 
+    Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
+
     // Initialize SHT31 (Temperature & Humidity)
     if (sht31.begin(0x44))  // 0x44 is default I2C address for SHT31
     {
@@ -45,6 +49,7 @@ void SensorManager::begin()
     else
     {
         sht31Ready = false;
+        sht31ReadingValid = false;
         Logger::error("✗ SHT31 NOT FOUND");
     }
 
@@ -104,16 +109,20 @@ void SensorManager::updateSHT31()
     float humidity = sht31.readHumidity();
 
     // Check for valid readings
-    if (!isnan(temp) && !isnan(humidity))
+    if (!isnan(temp) && !isnan(humidity) &&
+        temp >= -40.0f && temp <= 125.0f &&
+        humidity >= 0.0f && humidity <= 100.0f)
     {
         airTemp = temp;
         airHumidity = humidity;
+        sht31ReadingValid = true;
 
         Logger::debug(
             ("SHT31: T=" + String(temp, 1) + "°C, H=" + String(humidity, 1) + "%").c_str());
     }
     else
     {
+        sht31ReadingValid = false;
         Logger::warning("SHT31: Invalid reading");
     }
 }
@@ -177,6 +186,11 @@ float SensorManager::getEggTemperature()
 bool SensorManager::isSHT31Ready()
 {
     return sht31Ready;
+}
+
+bool SensorManager::isSHT31ReadingValid()
+{
+    return sht31Ready && sht31ReadingValid;
 }
 
 /******************************************************
