@@ -82,7 +82,7 @@ A complete IoT solution for automated egg incubation with real-time monitoring a
 
 ## 📐 Wiring Diagram
 
-See the [low-voltage hardware schematic](hardware/wiring-schematic.md) for the complete connection diagram, pin map, power domains, and safety notes. The DS18B20 uses a dedicated GPIO 17 data line; it must not share the SHT31 I²C SDA line.
+Open the editable [KiCad schematic](hardware/eggincubator-pro.kicad_sch) in KiCad to inspect the connector-level circuit and named nets. The [wiring notes](hardware/wiring-schematic.md) provide connection and safety details. The DS18B20 uses a dedicated GPIO 17 data line; it must not share the SHT31 I²C SDA line.
 
 ---
 
