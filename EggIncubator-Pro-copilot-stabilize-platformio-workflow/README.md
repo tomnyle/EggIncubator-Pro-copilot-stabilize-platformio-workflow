@@ -58,10 +58,10 @@ A complete IoT solution for automated egg incubation with real-time monitoring a
 - **DS18B20 Temperature Sensor** (1-Wire, GPIO 17)
 
 ### Actuators
-- **Heater Control**: SSR Relay (pin 25)
-- **Humidifier**: Relay Module (pin 26)
-- **Circulation Fan**: Relay Module (pin 27)
-- **Ventilation Fan**: Relay Module (pin 14)
+- **Heater Control**: SSR/relay input through an optocoupler (pin 25, active-low)
+- **Humidifier**: Relay input through an optocoupler (pin 26, active-low)
+- **Circulation Fan**: Relay input through an optocoupler (pin 27, active-low)
+- **Ventilation Fan**: Relay input through an optocoupler (pin 14, active-low)
 - **Egg Turner Motor**: BTS7960 Motor Driver (pins 32, 33, 23)
 
 ### Safety & Input
