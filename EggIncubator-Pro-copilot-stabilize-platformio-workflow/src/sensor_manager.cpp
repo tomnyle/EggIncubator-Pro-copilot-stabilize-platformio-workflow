@@ -9,7 +9,7 @@
 
 Adafruit_SHT31 SensorManager::sht31;
 
-OneWire SensorManager::oneWire(PIN_I2C_SDA);  // OneWire on same pin for now
+OneWire SensorManager::oneWire(PIN_DS18B20_DATA);
 
 DallasTemperature SensorManager::ds18b20(&SensorManager::oneWire);
 
