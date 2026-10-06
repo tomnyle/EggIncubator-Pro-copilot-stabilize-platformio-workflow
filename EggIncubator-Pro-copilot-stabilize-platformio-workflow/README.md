@@ -55,13 +55,13 @@ A complete IoT solution for automated egg incubation with real-time monitoring a
 
 ### Sensors
 - **SHT31 Temperature/Humidity Sensor** (I2C, address 0x44)
-- **DS18B20 Temperature Sensor** (1-Wire)
+- **DS18B20 Temperature Sensor** (1-Wire, GPIO 17)
 
 ### Actuators
-- **Heater Control**: SSR Relay (pin 25)
-- **Humidifier**: Relay Module (pin 26)
-- **Circulation Fan**: Relay Module (pin 27)
-- **Ventilation Fan**: Relay Module (pin 14)
+- **Heater Control**: SSR/relay input through an optocoupler (pin 25, active-low)
+- **Humidifier**: Relay input through an optocoupler (pin 26, active-low)
+- **Circulation Fan**: Relay input through an optocoupler (pin 27, active-low)
+- **Ventilation Fan**: Relay input through an optocoupler (pin 14, active-low)
 - **Egg Turner Motor**: BTS7960 Motor Driver (pins 32, 33, 23)
 
 ### Safety & Input
@@ -70,9 +70,9 @@ A complete IoT solution for automated egg incubation with real-time monitoring a
 - **Buzzer**: Alarm output (pin 4)
 
 ### Power
-- **ESP32**: 5V USB
+- **ESP32**: 5V USB or the optional fused 12V-to-5V buck input shown in the schematic; do not use both at once unless the selected DevKit supports it
 - **Heater/Fans**: 12V DC
-- **Motor**: 12V DC with BTS7960 driver
+- **Motor**: Separately fused supply to BTS7960 VMOT, sized for motor stall current; the BTS7960 logic ground and motor-supply return are typically common
 
 ### Communication
 - **WiFi**: Built-in ESP32 WiFi
@@ -82,40 +82,7 @@ A complete IoT solution for automated egg incubation with real-time monitoring a
 
 ## 📐 Wiring Diagram
 
-```
-ESP32 Board
-├── I2C Bus (pins 21, 22)
-│   ├── SHT31 VCC → 3.3V
-│   ├── SHT31 GND → GND
-│   ├── SHT31 SDA → GPIO 21
-│   └── SHT31 SCL → GPIO 22
-│
-├── 1-Wire (pin 21 currently, can be changed)
-│   ├── DS18B20 VCC → 3.3V
-│   ├── DS18B20 GND → GND
-│   └── DS18B20 DQ → GPIO 21 (with 4.7K pullup)
-│
-├── Relay Outputs (GPIO)
-│   ├── GPIO 25 → Heater SSR
-│   ├── GPIO 26 → Humidifier
-│   ├── GPIO 27 → Circulation Fan
-│   ├── GPIO 14 → Ventilation Fan
-│   └── GPIO 4 → Buzzer
-│
-├── Motor Driver (BTS7960)
-│   ├── GPIO 32 → RPWM
-│   ├── GPIO 33 → LPWM
-│   ├── GPIO 23 → ENABLE
-│
-├── Input Sensors
-│   ├── GPIO 18 → Limit Switch HOME
-│   ├── GPIO 19 → Limit Switch END
-│   └── GPIO 13 → Door Switch
-│
-└── Power
-    ├── 5V → USB Power
-    └── 12V → Motor/Relay Power (separate supply)
-```
+Open the editable [KiCad schematic](hardware/eggincubator-pro.kicad_sch) in KiCad to see U5, a visible symbolic ESP32 DevKit V1 module with the project's GPIO functions and 5 V input; this is a module interface, not the bare ESP32 IC or an exact physical board pinout. The schematic also shows sensor pull-ups, status LED, four PC817 relay-control channels with output pull-ups, buzzer transistor driver, and separately fused logic/motor power inputs. The [wiring notes](hardware/wiring-schematic.md) explain isolation, module compatibility, and safety limits. The DS18B20 uses dedicated GPIO 17; it does not share the SHT31 I²C SDA line. This is not a fabrication-ready PCB: exact module footprint/pinout, load/fuse ratings, PCB layout, and electrical safety review are still required.
 
 ---
 
@@ -181,6 +148,7 @@ Edit `include/pins.h` to change hardware pins:
 ```cpp
 #define PIN_I2C_SDA          21    // I2C Data
 #define PIN_I2C_SCL          22    // I2C Clock
+#define PIN_DS18B20_DATA     17    // Dedicated 1-Wire (4.7 kΩ pull-up to 3.3 V; don't use as UART2 TX)
 
 #define PIN_HEATER_SSR       25    // Heater
 #define PIN_HUMIDIFIER       26    // Humidifier
@@ -357,7 +325,7 @@ homeassistant/sensor/eggincubator01/egg_temperature/config
 - Look for: `✗ SHT31 NOT FOUND`
 
 **DS18B20 (1-Wire)**:
-- Verify 1-Wire pin connection (currently pin 21)
+- Verify 1-Wire pin connection (GPIO 17)
 - Check 4.7K pullup resistor
 - Look for: `✗ DS18B20 NOT FOUND`
 
