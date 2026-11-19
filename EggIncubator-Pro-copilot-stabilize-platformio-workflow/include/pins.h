@@ -18,6 +18,11 @@
  *********************************************************************/
 #define PIN_I2C_SDA              21
 #define PIN_I2C_SCL              22
+#ifndef PIN_DS18B20
+// Change this to the GPIO routed to the PCB's DS18B20 DQ connector.
+// The 1-Wire bus must not share the SHT31 I2C SDA pin.
+#define PIN_DS18B20              16
+#endif
 
 /**********************************************************************
  * OUTPUT DEVICES
@@ -56,12 +61,10 @@
 /**********************************************************************
  * LOGIC LEVEL DEFINITIONS
  *
- * Relay active level:
- * - Active HIGH module: RELAY_ON = HIGH, RELAY_OFF = LOW
- * - Active LOW module : RELAY_ON = LOW,  RELAY_OFF = HIGH
+ * Relay outputs drive the ULN2003A inputs. HIGH enables the sink output.
  *********************************************************************/
-#define RELAY_ON                 LOW
-#define RELAY_OFF                HIGH
+#define RELAY_ON                 HIGH
+#define RELAY_OFF                LOW
 
 /**********************************************************************
  * OPTIONAL GENERIC STATES

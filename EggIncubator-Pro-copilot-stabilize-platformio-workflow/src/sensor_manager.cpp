@@ -2,6 +2,7 @@
 #include "pins.h"
 #include "logger.h"
 #include "system_state.h"
+#include <math.h>
 
 /******************************************************
  * Static Variable Initialization
@@ -9,13 +10,13 @@
 
 Adafruit_SHT31 SensorManager::sht31;
 
-OneWire SensorManager::oneWire(PIN_I2C_SDA);  // OneWire on same pin for now
+OneWire SensorManager::oneWire(PIN_DS18B20);
 
 DallasTemperature SensorManager::ds18b20(&SensorManager::oneWire);
 
-float SensorManager::airTemp = 0.0f;
-float SensorManager::airHumidity = 0.0f;
-float SensorManager::eggTemp = 0.0f;
+float SensorManager::airTemp = NAN;
+float SensorManager::airHumidity = NAN;
+float SensorManager::eggTemp = NAN;
 
 bool SensorManager::sht31Ready = false;
 bool SensorManager::ds18b20Ready = false;
@@ -36,11 +37,14 @@ void SensorManager::begin()
     Logger::info("Initializing Sensor Manager");
     Logger::info("--------------------------------");
 
+    Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
+
     // Initialize SHT31 (Temperature & Humidity)
     if (sht31.begin(0x44))  // 0x44 is default I2C address for SHT31
     {
         sht31Ready = true;
         Logger::info("✓ SHT31 Initialized");
+        updateSHT31();
     }
     else
     {
@@ -104,7 +108,9 @@ void SensorManager::updateSHT31()
     float humidity = sht31.readHumidity();
 
     // Check for valid readings
-    if (!isnan(temp) && !isnan(humidity))
+    if (isfinite(temp) && isfinite(humidity) &&
+        temp >= -40.0f && temp <= 125.0f &&
+        humidity >= 0.0f && humidity <= 100.0f)
     {
         airTemp = temp;
         airHumidity = humidity;

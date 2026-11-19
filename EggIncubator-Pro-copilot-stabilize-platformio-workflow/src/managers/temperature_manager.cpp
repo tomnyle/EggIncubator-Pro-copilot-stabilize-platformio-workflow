@@ -67,8 +67,11 @@ void TemperatureManager::update()
     currentTemperature = SensorManager::getAirTemperature();
 
     // Skip if sensor not ready or invalid reading
-    if (currentTemperature <= 0 || !SensorManager::isSHT31Ready())
+    if (!SensorManager::isSHT31Ready() || !isfinite(currentTemperature) ||
+        currentTemperature < -40.0f || currentTemperature > 125.0f)
     {
+        RelayController::heater(false);
+        heaterPWM = 0;
         return;
     }
 
