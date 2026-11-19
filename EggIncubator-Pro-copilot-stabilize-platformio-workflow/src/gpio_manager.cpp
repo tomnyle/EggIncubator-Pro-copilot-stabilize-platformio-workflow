@@ -16,9 +16,8 @@ void GPIOManager::begin()
     pinMode(PIN_FAN_CIRCULATION, OUTPUT);
     pinMode(PIN_FAN_VENT, OUTPUT);
 
-    // BTS7960
-    // RPWM và LPWM sẽ được cấu hình trong BTS7960::begin()
-    pinMode(PIN_BTS_ENABLE, OUTPUT);
+    // DM542 STEP/DIR are configured by EggTurnerManager.
+    pinMode(PIN_DM542_ENABLE, OUTPUT);
 
     digitalWrite(PIN_BUZZER, LOW);
     pinMode(PIN_BUZZER, OUTPUT);
@@ -36,7 +35,7 @@ void GPIOManager::begin()
      **********************************************************/
 
     // Tắt driver motor khi khởi động
-    digitalWrite(PIN_BTS_ENABLE, LOW);
+    digitalWrite(PIN_DM542_ENABLE, DM542_ENABLE_INACTIVE);
 
     // Tắt còi
     digitalWrite(PIN_BUZZER, LOW);

@@ -89,9 +89,12 @@ private:
     static uint32_t turnStartTime;      // When current turn started
     static uint32_t totalTurns;         // Total number of turns performed
 
-    // Motor control pins
-    static uint8_t motorLeftPin;
-    static uint8_t motorRightPin;
+    // DM542 control pins
+    static uint8_t stepPin;
+    static uint8_t directionPin;
+    static uint8_t enablePin;
+    static uint32_t lastStepMicros;
+    static bool stepLevel;
 
     // Turn direction tracking
     enum TurnDirection
@@ -112,9 +115,14 @@ private:
     static void stopTurner();
 
     /******************************************************
-     * Control motor direction
+     * Control DM542 direction
      ******************************************************/
     static void setMotorDirection(TurnDirection direction);
+
+    /******************************************************
+     * Generate one non-blocking DM542 step pulse
+     ******************************************************/
+    static void updateStepPulse(uint32_t nowMicros);
 
     /******************************************************
      * Get opposite turn direction

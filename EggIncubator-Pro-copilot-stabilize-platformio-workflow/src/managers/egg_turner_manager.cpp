@@ -18,8 +18,11 @@ uint32_t EggTurnerManager::lastTurnTime = 0;
 uint32_t EggTurnerManager::turnStartTime = 0;
 uint32_t EggTurnerManager::totalTurns = 0;
 
-uint8_t EggTurnerManager::motorLeftPin = PIN_MOTOR_LEFT;
-uint8_t EggTurnerManager::motorRightPin = PIN_MOTOR_RIGHT;
+uint8_t EggTurnerManager::stepPin = PIN_DM542_STEP;
+uint8_t EggTurnerManager::directionPin = PIN_DM542_DIR;
+uint8_t EggTurnerManager::enablePin = PIN_DM542_ENABLE;
+uint32_t EggTurnerManager::lastStepMicros = 0;
+bool EggTurnerManager::stepLevel = false;
 
 EggTurnerManager::TurnDirection EggTurnerManager::lastTurnDirection = LEFT;
 
@@ -33,13 +36,15 @@ void EggTurnerManager::begin()
     Logger::info("Egg Turner Manager Started");
     Logger::info("--------------------------------");
 
-    // Setup motor pins
-    pinMode(motorLeftPin, OUTPUT);
-    pinMode(motorRightPin, OUTPUT);
+    // Setup DM542 pulse, direction and enable pins.
+    pinMode(stepPin, OUTPUT);
+    pinMode(directionPin, OUTPUT);
+    pinMode(enablePin, OUTPUT);
 
     // Ensure motor is stopped
-    digitalWrite(motorLeftPin, LOW);
-    digitalWrite(motorRightPin, LOW);
+    digitalWrite(stepPin, LOW);
+    digitalWrite(directionPin, LOW);
+    digitalWrite(enablePin, DM542_ENABLE_INACTIVE);
 
     Logger::info(
         ("Turning Interval: " + String(turningIntervalMs / 60000.0f, 1) + " minutes").c_str());
@@ -64,6 +69,7 @@ void EggTurnerManager::update()
     if (turnerRunning)
     {
         uint32_t turnElapsed = now - turnStartTime;
+        updateStepPulse(micros());
 
         if (turnElapsed >= turnDurationMs)
         {
@@ -245,6 +251,10 @@ void EggTurnerManager::performTurn()
 
     // Start motor
     setMotorDirection(nextDirection);
+    digitalWrite(stepPin, LOW);
+    stepLevel = false;
+    lastStepMicros = micros();
+    digitalWrite(enablePin, DM542_ENABLE_ACTIVE);
     turnerRunning = true;
     turnStartTime = millis();
 
@@ -262,8 +272,9 @@ void EggTurnerManager::performTurn()
 
 void EggTurnerManager::stopTurner()
 {
-    digitalWrite(motorLeftPin, LOW);
-    digitalWrite(motorRightPin, LOW);
+    digitalWrite(stepPin, LOW);
+    digitalWrite(enablePin, DM542_ENABLE_INACTIVE);
+    stepLevel = false;
 
     lastTurnTime = millis();
 
@@ -278,18 +289,20 @@ void EggTurnerManager::stopTurner()
 
 void EggTurnerManager::setMotorDirection(TurnDirection direction)
 {
-    if (direction == LEFT)
+    digitalWrite(directionPin, direction == RIGHT ? HIGH : LOW);
+}
+
+void EggTurnerManager::updateStepPulse(uint32_t nowMicros)
+{
+    if (static_cast<uint32_t>(nowMicros - lastStepMicros) <
+        DM542_STEP_INTERVAL_US / 2)
     {
-        // Turn left: motorLeftPin HIGH, motorRightPin LOW
-        digitalWrite(motorLeftPin, HIGH);
-        digitalWrite(motorRightPin, LOW);
+        return;
     }
-    else  // RIGHT
-    {
-        // Turn right: motorLeftPin LOW, motorRightPin HIGH
-        digitalWrite(motorLeftPin, LOW);
-        digitalWrite(motorRightPin, HIGH);
-    }
+
+    lastStepMicros = nowMicros;
+    stepLevel = !stepLevel;
+    digitalWrite(stepPin, stepLevel ? HIGH : LOW);
 }
 
 /******************************************************
