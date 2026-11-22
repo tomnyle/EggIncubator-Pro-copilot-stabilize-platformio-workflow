@@ -218,24 +218,7 @@ void EggTurnerManager::manualTurn()
 
 void EggTurnerManager::enable()
 {
-    if (!controlEnabled)
-    {
-        if (!REV3_ALLOW_TURNER)
-        {
-            Logger::error("Turner disabled in REV3 test build");
-            return;
-        }
-        if (motorTimer == nullptr || SystemState::getAlarmStatus().alarmActive)
-        {
-            Logger::error("Cannot enable turner: timer unavailable or alarm active");
-            return;
-        }
-        controlEnabled = true;
-        lastTurnTime = millis();
-        turnerRunning = false;
-
-        Logger::info("Egg Turning ENABLED");
-    }
+    Logger::warning("Turner disabled in simulation build");
 }
 
 /******************************************************

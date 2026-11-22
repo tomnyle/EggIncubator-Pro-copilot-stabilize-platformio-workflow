@@ -6,6 +6,10 @@ class RelayController
 public:
 
     static void begin();
+    static bool simulatedHeater();
+    static bool simulatedHumidifier();
+    static bool simulatedFan();
+    static bool simulatedVentilation();
 
     // Output Control
     static void heater(bool state);

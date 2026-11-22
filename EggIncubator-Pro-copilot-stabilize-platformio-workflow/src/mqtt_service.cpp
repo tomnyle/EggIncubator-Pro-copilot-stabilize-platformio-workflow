@@ -323,8 +323,6 @@ void MQTTService::callback(char *topic, byte *payload, unsigned int length)
     message.trim();
     message.toUpperCase();
 
-    const bool state = (message == "ON");
-
     Serial.print("[MQTT] RX ");
     Serial.print(cmdTopic);
     Serial.print(" = ");
@@ -336,30 +334,16 @@ void MQTTService::callback(char *topic, byte *payload, unsigned int length)
         return;
     }
 
-    if ((cmdTopic.endsWith("/heater/set") || cmdTopic.endsWith("/humidifier/set")) &&
-        state && (!SensorManager::isSHT31Ready() ||
-                  !isfinite(SensorManager::getAirTemperature()) ||
-                  !isfinite(SensorManager::getAirHumidity())))
+    if (cmdTopic.endsWith("/heater/set") || cmdTopic.endsWith("/humidifier/set") ||
+        cmdTopic.endsWith("/fan/set") || cmdTopic.endsWith("/vent/set") ||
+        cmdTopic.endsWith("/turner/set"))
     {
-        Serial.println("[MQTT] Refusing output: SHT31 reading invalid");
+        Serial.println("[MQTT] Output commands disabled in simulation build; use serial MANUAL commands");
         mqtt.publishRelayStates();
         return;
     }
 
-    if (cmdTopic.endsWith("/heater/set")) RelayController::heater(state);
-    else if (cmdTopic.endsWith("/humidifier/set")) RelayController::humidifier(state);
-    else if (cmdTopic.endsWith("/fan/set")) RelayController::fan(state);
-    else if (cmdTopic.endsWith("/vent/set")) RelayController::ventilation(state);
-    else if (cmdTopic.endsWith("/turner/set"))
-    {
-        if (state && IncubationProfile::isLockdown(millis()))
-        {
-            Serial.println("[MQTT] Refusing turner: lockdown active");
-        }
-        else if (state) EggTurnerManager::enable();
-        else EggTurnerManager::disable();
-    }
-    else if (cmdTopic.endsWith("/profile/set"))
+    if (cmdTopic.endsWith("/profile/set"))
     {
         if (IncubationProfile::setProfileByCode(message, millis()))
         {

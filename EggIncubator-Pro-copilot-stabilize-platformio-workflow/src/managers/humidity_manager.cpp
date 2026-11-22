@@ -1,7 +1,6 @@
 #include "humidity_manager.h"
 
 #include <math.h>
-#include "sensor_manager.h"
 #include "relay_controller.h"
 #include "logger.h"
 
@@ -39,20 +38,21 @@ void HumidityManager::begin()
  * Update - Control humidity
  ******************************************************/
 
-void HumidityManager::update()
+void HumidityManager::update(float humidity, bool sensorReady)
 {
     if (!controlEnabled)
     {
         return;
     }
 
-    currentHumidity = SensorManager::getAirHumidity();
+    currentHumidity = humidity;
 
-    if (!SensorManager::isSHT31Ready() || !isfinite(currentHumidity) ||
+    if (!sensorReady || !isfinite(currentHumidity) ||
         currentHumidity < 0.0f || currentHumidity > 100.0f)
     {
         RelayController::humidifier(false);
         humidifierRunning = false;
+        stableCounter = 0;
         return;
     }
 

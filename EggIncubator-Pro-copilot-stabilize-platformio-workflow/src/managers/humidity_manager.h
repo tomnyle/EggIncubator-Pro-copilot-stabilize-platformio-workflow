@@ -20,7 +20,7 @@ public:
     /******************************************************
      * Update - Check humidity and control humidifier
      ******************************************************/
-    static void update();
+    static void update(float humidity, bool sensorReady);
 
     /******************************************************
      * Set Target Humidity

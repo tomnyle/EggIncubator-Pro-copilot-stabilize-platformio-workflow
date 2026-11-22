@@ -21,7 +21,7 @@ public:
     /******************************************************
      * Update - Run PID calculation and control heater
      ******************************************************/
-    static void update();
+    static void update(float temperature, bool sensorReady);
 
     /******************************************************
      * Set Target Temperature

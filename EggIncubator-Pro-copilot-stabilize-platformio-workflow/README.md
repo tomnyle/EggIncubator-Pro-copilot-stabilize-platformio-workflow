@@ -30,9 +30,32 @@ indistinguishable from an open switch; independent hardware protection is
 required. The timer, input polarities, movement and mechanical safety are not
 validated on the physical board.
 
-Profile day resets after reboot, operating-mode selection is not implemented,
-and heater control lacks production-grade independent overtemperature and
-watchdog protection. Do not connect heaters or humidifiers.
+Profile day resets after reboot, and heater control lacks production-grade
+independent overtemperature and watchdog protection. Do not connect heaters
+or humidifiers.
+
+## Safe test modes
+
+The firmware starts in **MANUAL**, with all simulated requests off. In the
+serial monitor at 115200 baud, send uppercase commands terminated by Enter:
+
+* `MODE MANUAL`: use `SET HEATER ON`, `SET HUMIDIFIER ON`, `SET FAN ON`,
+  `SET VENT ON` or `SET TURNER ON`; replace `ON` with `OFF` to clear a request.
+* `MODE AUTO`: run the temperature and humidity control logic with real SHT31
+  readings.
+* `MODE DRYRUN`: run that same logic using simulated inputs, for example
+  `INPUT 35.0 45.0` (temperature in °C, relative humidity in %). No control
+  request is made until a valid pair has been entered. Allowed ranges are
+  -40..125 °C and 0..100%.
+
+Switching modes clears all simulated requests and dry-run inputs. Status and
+`[SIMULATION]` messages distinguish requests from real outputs. The manual
+turner request is only a displayed state: it does not simulate movement or
+limits. Auto does not schedule simulated turns or control fans. MQTT output
+commands are disabled in this build; the MQTT relay states report the actual,
+locked-off outputs. Physical relay and motor outputs remain locked off in all
+three modes even if the `REV3_ALLOW_*` flags are set. These modes do not make
+the firmware production-ready.
 
 ## Configure and build
 

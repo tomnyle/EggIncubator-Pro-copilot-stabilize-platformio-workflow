@@ -1,7 +1,6 @@
 #include "temperature_manager.h"
 
 #include <math.h>
-#include "sensor_manager.h"
 #include "relay_controller.h"
 #include "logger.h"
 #include "pins.h"
@@ -56,7 +55,7 @@ void TemperatureManager::begin()
  * Update - Run PID control loop
  ******************************************************/
 
-void TemperatureManager::update()
+void TemperatureManager::update(float temperature, bool sensorReady)
 {
     if (!controlEnabled)
     {
@@ -64,14 +63,16 @@ void TemperatureManager::update()
     }
 
     // Get current temperature from sensor
-    currentTemperature = SensorManager::getAirTemperature();
+    currentTemperature = temperature;
 
     // Skip if sensor not ready or invalid reading
-    if (!SensorManager::isSHT31Ready() || !isfinite(currentTemperature) ||
+    if (!sensorReady || !isfinite(currentTemperature) ||
         currentTemperature < -40.0f || currentTemperature > 125.0f)
     {
         RelayController::heater(false);
         heaterPWM = 0;
+        pidController.reset();
+        stableCounter = 0;
         return;
     }
 

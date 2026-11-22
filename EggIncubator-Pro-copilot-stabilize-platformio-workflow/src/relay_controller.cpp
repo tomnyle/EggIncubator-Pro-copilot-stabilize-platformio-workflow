@@ -4,7 +4,23 @@
 
 #include "pins.h"
 #include "system_state.h"
-#include "app_config.h"
+namespace
+{
+bool simulatedHeaterRequest = false;
+bool simulatedHumidifierRequest = false;
+bool simulatedFanRequest = false;
+bool simulatedVentilationRequest = false;
+
+void logSimulationRequest(const char *name, bool state, bool &previousState)
+{
+    if (state != previousState)
+    {
+        Serial.printf("[SIMULATION] %s request %s; hardware held OFF\n",
+                      name, state ? "ON" : "OFF");
+        previousState = state;
+    }
+}
+}
 
 /******************************************************
  * Private
@@ -28,17 +44,19 @@ void RelayController::begin()
     allOff();
 }
 
+bool RelayController::simulatedHeater() { return simulatedHeaterRequest; }
+bool RelayController::simulatedHumidifier() { return simulatedHumidifierRequest; }
+bool RelayController::simulatedFan() { return simulatedFanRequest; }
+bool RelayController::simulatedVentilation() { return simulatedVentilationRequest; }
+
 /******************************************************
  * Heater
  ******************************************************/
 
 void RelayController::heater(bool state)
 {
-    if (!REV3_ALLOW_THERMAL_OUTPUTS && state)
-    {
-        Serial.println("[SAFETY] Heater disabled in REV3 test build");
-        state = false;
-    }
+    logSimulationRequest("Heater", state, simulatedHeaterRequest);
+    state = false;
     systemState.relay.heater = state;
 
     writeRelay(
@@ -52,11 +70,8 @@ void RelayController::heater(bool state)
 
 void RelayController::humidifier(bool state)
 {
-    if (!REV3_ALLOW_THERMAL_OUTPUTS && state)
-    {
-        Serial.println("[SAFETY] Humidifier disabled in REV3 test build");
-        state = false;
-    }
+    logSimulationRequest("Humidifier", state, simulatedHumidifierRequest);
+    state = false;
     systemState.relay.humidifier = state;
 
     writeRelay(
@@ -70,6 +85,8 @@ void RelayController::humidifier(bool state)
 
 void RelayController::fan(bool state)
 {
+    logSimulationRequest("Circulation fan", state, simulatedFanRequest);
+    state = false;
     systemState.relay.circulationFan = state;
 
     writeRelay(
@@ -83,6 +100,8 @@ void RelayController::fan(bool state)
 
 void RelayController::ventilation(bool state)
 {
+    logSimulationRequest("Ventilation fan", state, simulatedVentilationRequest);
+    state = false;
     systemState.relay.ventilationFan = state;
 
     writeRelay(
