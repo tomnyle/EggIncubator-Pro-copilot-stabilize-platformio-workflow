@@ -10,6 +10,8 @@ public:
     static bool simulatedHumidifier();
     static bool simulatedFan();
     static bool simulatedVentilation();
+    static void updateHeaterSafety(float temperature, bool sensorValid);
+    static bool heaterSafetyBlocked();
 
     // Output Control
     static void heater(bool state);

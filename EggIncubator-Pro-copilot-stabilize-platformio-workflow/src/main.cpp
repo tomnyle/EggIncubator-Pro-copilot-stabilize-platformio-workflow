@@ -40,6 +40,7 @@ void applyProfileControl();
 void processSerialCommands();
 void setTestMode(TestMode mode);
 void processCommand(char *command);
+void refreshHeaterSafety();
 
 void setup()
 {
@@ -88,8 +89,9 @@ void loop()
 
     network.loop();
     mqtt.loop();
-    processSerialCommands();
     SensorManager::update();
+    refreshHeaterSafety();
+    processSerialCommands();
     EggTurnerManager::update();
     digitalWrite(PIN_BUZZER, SystemState::getAlarmStatus().buzzerActive ? HIGH : LOW);
 
@@ -120,6 +122,16 @@ void loop()
     }
 
     delay(10);
+}
+
+void refreshHeaterSafety()
+{
+    const bool dryRun = testMode == TestMode::DRY_RUN;
+    const float temperature = dryRun ? simulatedTemperature : SensorManager::getAirTemperature();
+    const float humidity = dryRun ? simulatedHumidity : SensorManager::getAirHumidity();
+    const bool ready = dryRun || SensorManager::isSHT31Ready();
+    const bool valid = ready && isfinite(humidity) && humidity >= 0.0f && humidity <= 100.0f;
+    RelayController::updateHeaterSafety(temperature, valid);
 }
 
 void processSerialCommands()
@@ -200,6 +212,7 @@ void processCommand(char *command)
         }
         simulatedTemperature = temperature;
         simulatedHumidity = humidity;
+        refreshHeaterSafety();
         Serial.printf("[TEST] Simulated input: %.1f C, %.1f%%\n", temperature, humidity);
         return;
     }
@@ -243,6 +256,7 @@ void setTestMode(TestMode mode)
     simulatedHumidity = NAN;
 
     testMode = mode;
+    refreshHeaterSafety();
     if (testMode != TestMode::MANUAL)
     {
         TemperatureManager::enable();
@@ -324,6 +338,8 @@ void printSystemStatus()
     Serial.print("Test mode: ");
     Serial.println(testMode == TestMode::DRY_RUN ? "DRYRUN" : testMode == TestMode::AUTO ? "AUTO" : "MANUAL");
     Serial.println("Physical relay and motor outputs: LOCKED OFF");
+    Serial.print("Heater safety: ");
+    Serial.println(RelayController::heaterSafetyBlocked() ? "INHIBITED" : "READY");
     if (testMode == TestMode::DRY_RUN)
     {
         Serial.print("Simulated input: ");

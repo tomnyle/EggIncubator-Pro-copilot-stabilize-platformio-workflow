@@ -30,6 +30,11 @@ static void assertPhysicalOutputsOff()
 int main()
 {
     RelayController::begin();
+    assert(RelayController::heaterSafetyBlocked());
+    RelayController::heater(true);
+    assert(!RelayController::simulatedHeater());
+    RelayController::updateHeaterSafety(38.5f, true);
+    assert(!RelayController::heaterSafetyBlocked());
     RelayController::heater(true);
     RelayController::humidifier(true);
     RelayController::fan(true);
@@ -37,6 +42,29 @@ int main()
     assert(RelayController::simulatedHeater() && RelayController::simulatedHumidifier());
     assert(RelayController::simulatedFan() && RelayController::simulatedVentilation());
     assertPhysicalOutputsOff();
+
+    RelayController::updateHeaterSafety(39.49f, true);
+    assert(!RelayController::heaterSafetyBlocked());
+    RelayController::updateHeaterSafety(39.5f, true);
+    assert(RelayController::heaterSafetyBlocked());
+    assert(!RelayController::simulatedHeater());
+    RelayController::heater(true);
+    assert(!RelayController::simulatedHeater());
+    RelayController::updateHeaterSafety(38.51f, true);
+    assert(RelayController::heaterSafetyBlocked());
+    RelayController::updateHeaterSafety(38.5f, true);
+    assert(!RelayController::heaterSafetyBlocked());
+    assert(!RelayController::simulatedHeater());
+    RelayController::heater(true);
+    RelayController::updateHeaterSafety(37.0f, false);
+    assert(RelayController::heaterSafetyBlocked());
+    assert(!RelayController::simulatedHeater());
+    RelayController::updateHeaterSafety(NAN, true);
+    assert(RelayController::heaterSafetyBlocked());
+    RelayController::updateHeaterSafety(39.0f, true);
+    assert(RelayController::heaterSafetyBlocked());
+    RelayController::updateHeaterSafety(37.0f, true);
+    assert(!RelayController::heaterSafetyBlocked());
     RelayController::allOff();
     assert(!RelayController::simulatedHeater() && !RelayController::simulatedHumidifier());
     assert(!RelayController::simulatedFan() && !RelayController::simulatedVentilation());

@@ -1,11 +1,17 @@
 #include "relay_controller.h"
 
 #include <Arduino.h>
+#include <math.h>
 
 #include "pins.h"
 #include "system_state.h"
+
 namespace
 {
+constexpr float heaterCutoffTemperature = 39.5f;
+constexpr float heaterRecoveryTemperature = 38.5f;
+bool heaterBlocked = true;
+bool heaterRejectionLogged = false;
 bool simulatedHeaterRequest = false;
 bool simulatedHumidifierRequest = false;
 bool simulatedFanRequest = false;
@@ -48,6 +54,30 @@ bool RelayController::simulatedHeater() { return simulatedHeaterRequest; }
 bool RelayController::simulatedHumidifier() { return simulatedHumidifierRequest; }
 bool RelayController::simulatedFan() { return simulatedFanRequest; }
 bool RelayController::simulatedVentilation() { return simulatedVentilationRequest; }
+bool RelayController::heaterSafetyBlocked() { return heaterBlocked; }
+
+void RelayController::updateHeaterSafety(float temperature, bool sensorValid)
+{
+    const bool valid = sensorValid && isfinite(temperature) &&
+                       temperature >= -40.0f && temperature <= 125.0f;
+    const bool wasBlocked = heaterBlocked;
+    if (!valid || temperature >= heaterCutoffTemperature)
+        heaterBlocked = true;
+    else if (temperature <= heaterRecoveryTemperature)
+        heaterBlocked = false;
+
+    if (heaterBlocked && !wasBlocked)
+    {
+        Serial.println(valid ? "[SAFETY] Heater inhibited: temperature >= 39.5 C"
+                             : "[SAFETY] Heater inhibited: invalid sensor");
+        heater(false);
+    }
+    else if (!heaterBlocked && wasBlocked)
+    {
+        heaterRejectionLogged = false;
+        Serial.println("[SAFETY] Heater inhibit cleared: valid temperature <= 38.5 C");
+    }
+}
 
 /******************************************************
  * Heater
@@ -55,6 +85,15 @@ bool RelayController::simulatedVentilation() { return simulatedVentilationReques
 
 void RelayController::heater(bool state)
 {
+    if (state && heaterBlocked)
+    {
+        if (!heaterRejectionLogged)
+        {
+            Serial.println("[SAFETY] Heater request rejected: overtemperature or invalid sensor");
+            heaterRejectionLogged = true;
+        }
+        state = false;
+    }
     logSimulationRequest("Heater", state, simulatedHeaterRequest);
     state = false;
     systemState.relay.heater = state;

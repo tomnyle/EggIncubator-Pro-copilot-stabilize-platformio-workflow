@@ -17,12 +17,18 @@ class GPIOManager { public: static void begin() {} };
 class SensorManager
 {
 public:
+    static float temperature;
+    static float humidity;
+    static bool ready;
     static void begin() {}
     static void update() {}
-    static bool isSHT31Ready() { return true; }
-    static float getAirTemperature() { return 35.0f; }
-    static float getAirHumidity() { return 40.0f; }
+    static bool isSHT31Ready() { return ready; }
+    static float getAirTemperature() { return temperature; }
+    static float getAirHumidity() { return humidity; }
 };
+float SensorManager::temperature = 35.0f;
+float SensorManager::humidity = 40.0f;
+bool SensorManager::ready = true;
 class SystemState
 {
 public:
@@ -105,8 +111,15 @@ int main()
     fakeMillis += 1000;
     loop();
     assert(RelayController::simulatedHeater() && RelayController::simulatedHumidifier());
+    send("INPUT 39.5 40");
+    assert(RelayController::heaterSafetyBlocked());
+    assert(!RelayController::simulatedHeater());
+    send("INPUT 39.0 40");
+    assert(RelayController::heaterSafetyBlocked());
+    send("INPUT 38.5 40");
+    assert(!RelayController::heaterSafetyBlocked());
     send("SET HEATER OFF");
-    assert(RelayController::simulatedHeater());
+    assert(!RelayController::simulatedHeater());
 
     send("MODE AUTO");
     assert(testMode == TestMode::AUTO);
@@ -119,6 +132,24 @@ int main()
 
     send("MODE MANUAL");
     assert(!RelayController::simulatedHeater() && !RelayController::simulatedHumidifier());
+    send("SET HEATER ON");
+    assert(RelayController::simulatedHeater());
+    SensorManager::temperature = 39.5f;
+    loop();
+    assert(RelayController::heaterSafetyBlocked());
+    assert(!RelayController::simulatedHeater());
+    send("SET HEATER ON");
+    assert(!RelayController::simulatedHeater());
+    SensorManager::temperature = 38.5f;
+    loop();
+    assert(!RelayController::heaterSafetyBlocked());
+    assert(!RelayController::simulatedHeater());
+    send("SET HEATER ON");
+    assert(RelayController::simulatedHeater());
+    SensorManager::humidity = NAN;
+    loop();
+    assert(RelayController::heaterSafetyBlocked());
+    assert(!RelayController::simulatedHeater());
     send(std::string(100, 'x') + "MODE AUTO");
     assert(testMode == TestMode::MANUAL);
     assert(pinValues[PIN_HEATER_SSR] == RELAY_OFF);

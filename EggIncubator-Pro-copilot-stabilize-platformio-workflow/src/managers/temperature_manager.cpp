@@ -62,6 +62,15 @@ void TemperatureManager::update(float temperature, bool sensorReady)
         return;
     }
 
+    if (RelayController::heaterSafetyBlocked())
+    {
+        RelayController::heater(false);
+        heaterPWM = 0;
+        pidController.reset();
+        stableCounter = 0;
+        return;
+    }
+
     // Get current temperature from sensor
     currentTemperature = temperature;
 

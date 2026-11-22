@@ -57,6 +57,14 @@ locked-off outputs. Physical relay and motor outputs remain locked off in all
 three modes even if the `REV3_ALLOW_*` flags are set. These modes do not make
 the firmware production-ready.
 
+The experimental software heater interlock starts inhibited. It blocks and
+clears the simulated heater request at 39.5 °C or on an invalid SHT31 reading,
+and automatically clears only after a valid reading at or below 38.5 °C. In
+DRYRUN it uses the simulated inputs; in AUTO and MANUAL it uses the actual
+sensor. An inhibited manual request must be issued again after recovery.
+These provisional limits are not validated safety thresholds, and this
+software interlock does not replace an independent hardware cutoff.
+
 ## Configure and build
 
 1. Copy `include/app_config.local.h.example` to `include/app_config.local.h`
