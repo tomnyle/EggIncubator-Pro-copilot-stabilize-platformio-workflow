@@ -176,13 +176,19 @@ void printSystemStatus()
     Serial.println(IncubationProfile::isLockdown(now) ? "LOCKDOWN" : "INCUBATION");
 
     Serial.print("Temperature: ");
-    Serial.print(TemperatureManager::getCurrentTemperature(), 1);
+    if (isfinite(SensorManager::getAirTemperature()))
+        Serial.print(SensorManager::getAirTemperature(), 1);
+    else
+        Serial.print("unavailable");
     Serial.print(" C (Target: ");
     Serial.print(TemperatureManager::getTargetTemperature(), 1);
     Serial.println(" C)");
 
     Serial.print("Humidity: ");
-    Serial.print(HumidityManager::getCurrentHumidity(), 1);
+    if (isfinite(SensorManager::getAirHumidity()))
+        Serial.print(SensorManager::getAirHumidity(), 1);
+    else
+        Serial.print("unavailable");
     Serial.print("% (Target: ");
     Serial.print(HumidityManager::getTargetHumidity(), 1);
     Serial.println("%)");
