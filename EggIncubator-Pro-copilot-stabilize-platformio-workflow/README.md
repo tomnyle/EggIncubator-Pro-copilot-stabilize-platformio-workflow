@@ -56,9 +56,13 @@ and motor outputs remain locked off in all three modes even if the
 `REV3_ALLOW_*` flags are set. These modes do not make the firmware
 production-ready.
 
-With Wi-Fi, MQTT and Home Assistant MQTT discovery configured, five separate
-**Simulated** switches control virtual heater, humidifier, fans and turner
-requests in MANUAL. They become unavailable in AUTO or DRYRUN. The Simulation
+With Wi-Fi, MQTT and Home Assistant MQTT discovery configured, select
+**MANUAL**, **AUTO** or **DRYRUN** from the Simulation Mode Control entity.
+Five separate **Simulated** switches control virtual heater, humidifier, fans
+and turner requests in MANUAL. They become unavailable in AUTO or DRYRUN. In
+DRYRUN, enter temperature and humidity in the two Dry-run Input entities; both
+values are required before the controller simulates a response. AUTO uses the
+real SHT31 readings but still only simulates control outputs. The Simulation
 Mode and Simulated Heater Safety Inhibit entities show the current mode and
 interlock; an inhibited heater request is rejected. Existing output switches
 are labelled **locked off** and reject commands. Their OFF state is the

@@ -2,6 +2,8 @@
 
 #include <WiFi.h>
 #include <math.h>
+#include <stdlib.h>
+#include <string.h>
 #include "app_config.h"
 #include "logger.h"
 #include "sensor_manager.h"
@@ -288,6 +290,35 @@ void MQTTService::publishDiscovery()
             "\"avty_t\":\"" MQTT_ROOT_TOPIC "/status\","
             "\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\","
             + deviceJson + "}", true) && simulationDiscoveryOk;
+    simulationDiscoveryOk = publish("homeassistant/select/" DEVICE_ID "/simulation_mode_select/config",
+            "{\"name\":\"Simulation Mode Control\","
+            "\"uniq_id\":\"" DEVICE_ID "_simulation_mode_select\","
+            "\"cmd_t\":\"" MQTT_ROOT_TOPIC "/simulation/mode/set\","
+            "\"stat_t\":\"" MQTT_ROOT_TOPIC "/simulation/mode\","
+            "\"options\":[\"MANUAL\",\"AUTO\",\"DRYRUN\"],"
+            "\"avty_t\":\"" MQTT_ROOT_TOPIC "/status\","
+            "\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\","
+            + deviceJson + "}", true) && simulationDiscoveryOk;
+    simulationDiscoveryOk = publish("homeassistant/number/" DEVICE_ID "/dryrun_temperature/config",
+            "{\"name\":\"Dry-run Temperature Input\","
+            "\"uniq_id\":\"" DEVICE_ID "_dryrun_temperature\","
+            "\"cmd_t\":\"" MQTT_ROOT_TOPIC "/simulation/input/temperature/set\","
+            "\"stat_t\":\"" MQTT_ROOT_TOPIC "/simulation/input/temperature/state\","
+            "\"min\":-40,\"max\":125,\"step\":0.1,\"mode\":\"box\","
+            "\"unit_of_measurement\":\"°C\","
+            "\"availability\":[{\"topic\":\"" MQTT_ROOT_TOPIC "/status\"},"
+            "{\"topic\":\"" MQTT_ROOT_TOPIC "/simulation/dryrun/availability\"}],"
+            "\"availability_mode\":\"all\"," + deviceJson + "}", true) && simulationDiscoveryOk;
+    simulationDiscoveryOk = publish("homeassistant/number/" DEVICE_ID "/dryrun_humidity/config",
+            "{\"name\":\"Dry-run Humidity Input\","
+            "\"uniq_id\":\"" DEVICE_ID "_dryrun_humidity\","
+            "\"cmd_t\":\"" MQTT_ROOT_TOPIC "/simulation/input/humidity/set\","
+            "\"stat_t\":\"" MQTT_ROOT_TOPIC "/simulation/input/humidity/state\","
+            "\"min\":0,\"max\":100,\"step\":0.1,\"mode\":\"box\","
+            "\"unit_of_measurement\":\"%\","
+            "\"availability\":[{\"topic\":\"" MQTT_ROOT_TOPIC "/status\"},"
+            "{\"topic\":\"" MQTT_ROOT_TOPIC "/simulation/dryrun/availability\"}],"
+            "\"availability_mode\":\"all\"," + deviceJson + "}", true) && simulationDiscoveryOk;
     simulationDiscoveryOk = publish("homeassistant/binary_sensor/" DEVICE_ID "/simulation_heater_inhibit/config",
             "{\"name\":\"Simulated Heater Safety Inhibit\","
             "\"uniq_id\":\"" DEVICE_ID "_simulation_heater_inhibit\","
@@ -339,6 +370,7 @@ void MQTTService::publishSimulationStates()
         return;
     bool ok = true;
     ok = publish(MQTT_ROOT_TOPIC "/simulation/availability", isManualSimulationMode() ? "online" : "offline", true) && ok;
+    ok = publish(MQTT_ROOT_TOPIC "/simulation/dryrun/availability", strcmp(simulationModeName(), "DRYRUN") == 0 ? "online" : "offline", true) && ok;
     ok = publish(MQTT_ROOT_TOPIC "/simulation/mode", simulationModeName(), true) && ok;
     ok = publish(MQTT_ROOT_TOPIC "/simulation/heater_inhibit", RelayController::heaterSafetyBlocked() ? "ON" : "OFF", true) && ok;
     ok = publish(MQTT_ROOT_TOPIC "/simulation/heater/state", RelayController::simulatedHeater() ? "ON" : "OFF", true) && ok;
@@ -346,6 +378,12 @@ void MQTTService::publishSimulationStates()
     ok = publish(MQTT_ROOT_TOPIC "/simulation/fan/state", RelayController::simulatedFan() ? "ON" : "OFF", true) && ok;
     ok = publish(MQTT_ROOT_TOPIC "/simulation/vent/state", RelayController::simulatedVentilation() ? "ON" : "OFF", true) && ok;
     ok = publish(MQTT_ROOT_TOPIC "/simulation/turner/state", simulatedTurnerState() ? "ON" : "OFF", true) && ok;
+    const float temperature = simulatedInputTemperature();
+    const float humidity = simulatedInputHumidity();
+    ok = publish(MQTT_ROOT_TOPIC "/simulation/input/temperature/state",
+                 isfinite(temperature) ? String(temperature, 1) : String(""), true) && ok;
+    ok = publish(MQTT_ROOT_TOPIC "/simulation/input/humidity/state",
+                 isfinite(humidity) ? String(humidity, 1) : String(""), true) && ok;
     if (!ok)
         Serial.println("[MQTT] Failed to publish simulation state; will retry periodically");
 }
@@ -407,14 +445,40 @@ void MQTTService::callback(char *topic, byte *payload, unsigned int length)
     Serial.print(" = ");
     Serial.println(message);
 
-    if (!cmdTopic.endsWith("/profile/set") && message != "ON" && message != "OFF")
+    if (cmdTopic == MQTT_ROOT_TOPIC "/simulation/mode/set")
+    {
+        if (!setSimulationModeCommand(message.c_str()))
+            Serial.println("[MQTT] Simulation mode request rejected");
+        mqtt.publishSimulationStates();
+        return;
+    }
+
+    if (cmdTopic == MQTT_ROOT_TOPIC "/simulation/input/temperature/set" ||
+        cmdTopic == MQTT_ROOT_TOPIC "/simulation/input/humidity/set")
+    {
+        char *end = nullptr;
+        const float value = strtof(message.c_str(), &end);
+        const bool validNumber = end != message.c_str() && *end == '\0' && isfinite(value);
+        const bool accepted = validNumber &&
+            (cmdTopic.endsWith("/temperature/set")
+                 ? setDryRunTemperature(value)
+                 : setDryRunHumidity(value));
+        if (!accepted)
+            Serial.println("[MQTT] Dry-run input rejected; wrong mode or out of range");
+        mqtt.publishSimulationStates();
+        return;
+    }
+
+    const bool simulationOutputCommand = cmdTopic.startsWith(MQTT_ROOT_TOPIC "/simulation/");
+    if (!simulationOutputCommand && !cmdTopic.endsWith("/profile/set") &&
+        message != "ON" && message != "OFF")
     {
         Serial.println("[MQTT] Invalid ON/OFF command");
         mqtt.publishSimulationStates();
         return;
     }
 
-    if (cmdTopic.startsWith(MQTT_ROOT_TOPIC "/simulation/"))
+    if (simulationOutputCommand)
     {
         SimulatedOutput output;
         if (cmdTopic == MQTT_ROOT_TOPIC "/simulation/heater/set") output = SimulatedOutput::Heater;

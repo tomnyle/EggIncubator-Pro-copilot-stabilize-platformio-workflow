@@ -129,10 +129,45 @@ void loop()
 
 bool isManualSimulationMode() { return testMode == TestMode::MANUAL; }
 bool simulatedTurnerState() { return simulatedTurner; }
+float simulatedInputTemperature() { return simulatedTemperature; }
+float simulatedInputHumidity() { return simulatedHumidity; }
 
 const char *simulationModeName()
 {
     return testMode == TestMode::DRY_RUN ? "DRYRUN" : testMode == TestMode::AUTO ? "AUTO" : "MANUAL";
+}
+
+bool setSimulationModeCommand(const char *mode)
+{
+    if (strcmp(mode, "MANUAL") == 0) setTestMode(TestMode::MANUAL);
+    else if (strcmp(mode, "AUTO") == 0) setTestMode(TestMode::AUTO);
+    else if (strcmp(mode, "DRYRUN") == 0) setTestMode(TestMode::DRY_RUN);
+    else
+    {
+        Serial.println("[TEST] Invalid mode: use MANUAL, AUTO or DRYRUN.");
+        return false;
+    }
+    return true;
+}
+
+bool setDryRunTemperature(float temperature)
+{
+    if (testMode != TestMode::DRY_RUN || !isfinite(temperature) ||
+        temperature < -40.0f || temperature > 125.0f)
+        return false;
+    simulatedTemperature = temperature;
+    refreshHeaterSafety();
+    return true;
+}
+
+bool setDryRunHumidity(float humidity)
+{
+    if (testMode != TestMode::DRY_RUN || !isfinite(humidity) ||
+        humidity < 0.0f || humidity > 100.0f)
+        return false;
+    simulatedHumidity = humidity;
+    refreshHeaterSafety();
+    return true;
 }
 
 bool setManualSimulatedOutput(SimulatedOutput output, bool state)
@@ -170,14 +205,22 @@ void publishSimulationChanges()
     static TestMode lastMode = TestMode::MANUAL;
     static bool lastHeater = false, lastHumidifier = false, lastFan = false;
     static bool lastVent = false, lastTurner = false, lastBlocked = false;
+    static float lastTemperature = NAN, lastHumidity = NAN;
     const bool heater = RelayController::simulatedHeater();
     const bool humidifier = RelayController::simulatedHumidifier();
     const bool fan = RelayController::simulatedFan();
     const bool vent = RelayController::simulatedVentilation();
     const bool blocked = RelayController::heaterSafetyBlocked();
+    const bool temperatureChanged =
+        isfinite(lastTemperature) != isfinite(simulatedTemperature) ||
+        (isfinite(lastTemperature) && lastTemperature != simulatedTemperature);
+    const bool humidityChanged =
+        isfinite(lastHumidity) != isfinite(simulatedHumidity) ||
+        (isfinite(lastHumidity) && lastHumidity != simulatedHumidity);
+    const bool inputsChanged = temperatureChanged || humidityChanged;
     if (first || lastMode != testMode || lastHeater != heater ||
         lastHumidifier != humidifier || lastFan != fan || lastVent != vent ||
-        lastTurner != simulatedTurner || lastBlocked != blocked)
+        lastTurner != simulatedTurner || lastBlocked != blocked || inputsChanged)
     {
         mqtt.publishSimulationStates();
         first = false;
@@ -188,6 +231,8 @@ void publishSimulationChanges()
         lastVent = vent;
         lastTurner = simulatedTurner;
         lastBlocked = blocked;
+        lastTemperature = simulatedTemperature;
+        lastHumidity = simulatedHumidity;
     }
 }
 
@@ -251,10 +296,7 @@ void processCommand(char *command)
 
     if (strcmp(verb, "MODE") == 0 && first && !second)
     {
-        if (strcmp(first, "MANUAL") == 0) setTestMode(TestMode::MANUAL);
-        else if (strcmp(first, "AUTO") == 0) setTestMode(TestMode::AUTO);
-        else if (strcmp(first, "DRYRUN") == 0) setTestMode(TestMode::DRY_RUN);
-        else Serial.println("[TEST] Invalid mode: use MANUAL, AUTO or DRYRUN.");
+        setSimulationModeCommand(first);
         return;
     }
 
@@ -277,9 +319,11 @@ void processCommand(char *command)
             Serial.println("[TEST] Invalid INPUT. Use temperature -40..125 and humidity 0..100.");
             return;
         }
-        simulatedTemperature = temperature;
-        simulatedHumidity = humidity;
-        refreshHeaterSafety();
+        if (!setDryRunTemperature(temperature) || !setDryRunHumidity(humidity))
+        {
+            Serial.println("[TEST] Failed to apply simulated inputs.");
+            return;
+        }
         Serial.printf("[TEST] Simulated input: %.1f C, %.1f%%\n", temperature, humidity);
         return;
     }

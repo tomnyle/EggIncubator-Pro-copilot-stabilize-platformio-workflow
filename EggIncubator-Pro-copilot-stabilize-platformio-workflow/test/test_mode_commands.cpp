@@ -50,7 +50,15 @@ public:
     static uint32_t getTurnCount() { return 0; }
 };
 class NetworkService { public: void begin() {} void loop() {} };
-class MQTTService { public: void begin() {} void loop() {} void publishSimulationStates() {} };
+class MQTTService
+{
+public:
+    static int simulationPublishCount;
+    void begin() {}
+    void loop() {}
+    void publishSimulationStates() { ++simulationPublishCount; }
+};
+int MQTTService::simulationPublishCount = 0;
 NetworkService network;
 MQTTService mqtt;
 enum class IncubationProfileType { CHICKEN };
@@ -94,6 +102,10 @@ int main()
 {
     setup();
     assert(testMode == TestMode::MANUAL);
+    publishSimulationChanges();
+    const int initialPublishCount = MQTTService::simulationPublishCount;
+    publishSimulationChanges();
+    assert(MQTTService::simulationPublishCount == initialPublishCount);
     send("SET HEATER ON");
     send("SET TURNER ON");
     assert(RelayController::simulatedHeater() && simulatedTurner);

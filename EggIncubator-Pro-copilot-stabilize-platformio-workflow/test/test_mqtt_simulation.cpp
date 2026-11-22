@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cmath>
 #include <iostream>
 #include <string>
 #include "Arduino.h"
@@ -20,10 +21,36 @@ NetworkService network;
 MQTTService mqtt;
 bool manualMode = true;
 bool turnerState = false;
+bool dryRunMode = false;
+float dryRunTemperature = NAN;
+float dryRunHumidity = NAN;
 
 bool isManualSimulationMode() { return manualMode; }
 bool simulatedTurnerState() { return turnerState; }
-const char *simulationModeName() { return manualMode ? "MANUAL" : "AUTO"; }
+const char *simulationModeName() { return dryRunMode ? "DRYRUN" : manualMode ? "MANUAL" : "AUTO"; }
+float simulatedInputTemperature() { return dryRunTemperature; }
+float simulatedInputHumidity() { return dryRunHumidity; }
+bool setSimulationModeCommand(const char *mode)
+{
+    if (std::string(mode) == "MANUAL") { manualMode = true; dryRunMode = false; }
+    else if (std::string(mode) == "AUTO") { manualMode = false; dryRunMode = false; }
+    else if (std::string(mode) == "DRYRUN") { manualMode = false; dryRunMode = true; }
+    else return false;
+    dryRunTemperature = dryRunHumidity = NAN;
+    return true;
+}
+bool setDryRunTemperature(float value)
+{
+    if (!dryRunMode || !std::isfinite(value) || value < -40 || value > 125) return false;
+    dryRunTemperature = value;
+    return true;
+}
+bool setDryRunHumidity(float value)
+{
+    if (!dryRunMode || !std::isfinite(value) || value < 0 || value > 100) return false;
+    dryRunHumidity = value;
+    return true;
+}
 bool setManualSimulatedOutput(SimulatedOutput output, bool state)
 {
     if (!manualMode || (output == SimulatedOutput::Heater && state && RelayController::heaterSafetyBlocked()))
@@ -63,7 +90,19 @@ int main(int argc, char **argv)
             std::cout << config << '\n';
     }
     assert(published.count("homeassistant/sensor/eggincubator01/simulation_mode/config") == 1);
+    assert(published.count("homeassistant/select/eggincubator01/simulation_mode_select/config") == 1);
+    assert(published.count("homeassistant/number/eggincubator01/dryrun_temperature/config") == 1);
+    assert(published.count("homeassistant/number/eggincubator01/dryrun_humidity/config") == 1);
     assert(published.count("homeassistant/binary_sensor/eggincubator01/simulation_heater_inhibit/config") == 1);
+    const std::string &modeConfig = published.at("homeassistant/select/eggincubator01/simulation_mode_select/config");
+    const std::string &temperatureConfig = published.at("homeassistant/number/eggincubator01/dryrun_temperature/config");
+    const std::string &humidityConfig = published.at("homeassistant/number/eggincubator01/dryrun_humidity/config");
+    assert(modeConfig.find("\"options\":[\"MANUAL\",\"AUTO\",\"DRYRUN\"]") != std::string::npos);
+    assert(temperatureConfig.find("\"unit_of_measurement\":\"°C\"") != std::string::npos);
+    assert(humidityConfig.find("\"unit_of_measurement\":\"%\"") != std::string::npos);
+    assert(modeConfig.size() < 1024 && temperatureConfig.size() < 1024 && humidityConfig.size() < 1024);
+    if (argc > 1 && std::string(argv[1]) == "--dump-discovery")
+        std::cout << modeConfig << '\n' << temperatureConfig << '\n' << humidityConfig << '\n';
 
     activeClient->inject("eggincubator/simulation/heater/set", "ON");
     assert(RelayController::simulatedHeater());
@@ -85,6 +124,19 @@ int main(int argc, char **argv)
     assert(!RelayController::simulatedFan());
     activeClient->inject("eggincubator/simulation/fan/set", "bad");
     assert(!RelayController::simulatedFan());
+    activeClient->inject("eggincubator/simulation/mode/set", "DRYRUN");
+    assert(dryRunMode && !manualMode);
+    assert(published.at("eggincubator/simulation/dryrun/availability") == "online");
+    activeClient->inject("eggincubator/simulation/input/temperature/set", "35.2");
+    activeClient->inject("eggincubator/simulation/input/humidity/set", "44.7");
+    assert(dryRunTemperature == 35.2f && dryRunHumidity == 44.7f);
+    assert(published.at("eggincubator/simulation/input/temperature/state") == "35.2");
+    activeClient->inject("eggincubator/simulation/input/temperature/set", "126");
+    assert(dryRunTemperature == 35.2f);
+    activeClient->inject("eggincubator/simulation/mode/set", "AUTO");
+    assert(!dryRunMode && !manualMode);
+    assert(std::isnan(dryRunTemperature) && std::isnan(dryRunHumidity));
+    assert(published.at("eggincubator/simulation/dryrun/availability") == "offline");
     activeClient->inject("eggincubator/heater/set", "ON");
     assert(pinValues[PIN_HEATER_SSR] == RELAY_OFF);
 
