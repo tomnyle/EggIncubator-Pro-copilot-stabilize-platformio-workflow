@@ -50,7 +50,7 @@ public:
     static uint32_t getTurnCount() { return 0; }
 };
 class NetworkService { public: void begin() {} void loop() {} };
-class MQTTService { public: void begin() {} void loop() {} };
+class MQTTService { public: void begin() {} void loop() {} void publishSimulationStates() {} };
 NetworkService network;
 MQTTService mqtt;
 enum class IncubationProfileType { CHICKEN };
@@ -97,10 +97,15 @@ int main()
     send("SET HEATER ON");
     send("SET TURNER ON");
     assert(RelayController::simulatedHeater() && simulatedTurner);
+    assert(isManualSimulationMode());
+    assert(setManualSimulatedOutput(SimulatedOutput::Fan, true));
+    assert(RelayController::simulatedFan());
 
     send("MODE DRYRUN");
     assert(testMode == TestMode::DRY_RUN);
     assert(!RelayController::simulatedHeater() && !simulatedTurner);
+    assert(!RelayController::simulatedFan());
+    assert(!setManualSimulatedOutput(SimulatedOutput::Fan, true));
     assert(std::isnan(simulatedTemperature) && std::isnan(simulatedHumidity));
     send("INPUT nan 50");
     send("INPUT 35 101");
@@ -140,6 +145,7 @@ int main()
     assert(!RelayController::simulatedHeater());
     send("SET HEATER ON");
     assert(!RelayController::simulatedHeater());
+    assert(!setManualSimulatedOutput(SimulatedOutput::Heater, true));
     SensorManager::temperature = 38.5f;
     loop();
     assert(!RelayController::heaterSafetyBlocked());

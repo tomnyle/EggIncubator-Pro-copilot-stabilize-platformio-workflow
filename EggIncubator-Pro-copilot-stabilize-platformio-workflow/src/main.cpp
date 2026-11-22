@@ -13,6 +13,7 @@
 #include "mqtt_service.h"
 #include "incubation_profile.h"
 #include "app_config.h"
+#include "simulation_control.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -41,6 +42,7 @@ void processSerialCommands();
 void setTestMode(TestMode mode);
 void processCommand(char *command);
 void refreshHeaterSafety();
+void publishSimulationChanges();
 
 void setup()
 {
@@ -87,10 +89,10 @@ void loop()
         Serial.println("[LOOP] network.loop() + mqtt.loop()");
     }
 
-    network.loop();
-    mqtt.loop();
     SensorManager::update();
     refreshHeaterSafety();
+    network.loop();
+    mqtt.loop();
     processSerialCommands();
     EggTurnerManager::update();
     digitalWrite(PIN_BUZZER, SystemState::getAlarmStatus().buzzerActive ? HIGH : LOW);
@@ -121,7 +123,72 @@ void loop()
         }
     }
 
+    publishSimulationChanges();
     delay(10);
+}
+
+bool isManualSimulationMode() { return testMode == TestMode::MANUAL; }
+bool simulatedTurnerState() { return simulatedTurner; }
+
+const char *simulationModeName()
+{
+    return testMode == TestMode::DRY_RUN ? "DRYRUN" : testMode == TestMode::AUTO ? "AUTO" : "MANUAL";
+}
+
+bool setManualSimulatedOutput(SimulatedOutput output, bool state)
+{
+    if (!isManualSimulationMode())
+    {
+        Serial.println("[TEST] Simulated output commands require MANUAL mode.");
+        return false;
+    }
+    switch (output)
+    {
+        case SimulatedOutput::Heater:
+            if (state && RelayController::heaterSafetyBlocked())
+            {
+                Serial.println("[SAFETY] Simulated heater request rejected: heater inhibited.");
+                return false;
+            }
+            RelayController::heater(state);
+            return true;
+        case SimulatedOutput::Humidifier: RelayController::humidifier(state); return true;
+        case SimulatedOutput::Fan: RelayController::fan(state); return true;
+        case SimulatedOutput::Ventilation: RelayController::ventilation(state); return true;
+        case SimulatedOutput::Turner:
+            simulatedTurner = state;
+            Serial.printf("[SIMULATION] Turner request %s; motor held OFF\n", state ? "ON" : "OFF");
+            return true;
+    }
+    Serial.println("[TEST] Unknown simulated output.");
+    return false;
+}
+
+void publishSimulationChanges()
+{
+    static bool first = true;
+    static TestMode lastMode = TestMode::MANUAL;
+    static bool lastHeater = false, lastHumidifier = false, lastFan = false;
+    static bool lastVent = false, lastTurner = false, lastBlocked = false;
+    const bool heater = RelayController::simulatedHeater();
+    const bool humidifier = RelayController::simulatedHumidifier();
+    const bool fan = RelayController::simulatedFan();
+    const bool vent = RelayController::simulatedVentilation();
+    const bool blocked = RelayController::heaterSafetyBlocked();
+    if (first || lastMode != testMode || lastHeater != heater ||
+        lastHumidifier != humidifier || lastFan != fan || lastVent != vent ||
+        lastTurner != simulatedTurner || lastBlocked != blocked)
+    {
+        mqtt.publishSimulationStates();
+        first = false;
+        lastMode = testMode;
+        lastHeater = heater;
+        lastHumidifier = humidifier;
+        lastFan = fan;
+        lastVent = vent;
+        lastTurner = simulatedTurner;
+        lastBlocked = blocked;
+    }
 }
 
 void refreshHeaterSafety()
@@ -230,15 +297,11 @@ void processCommand(char *command)
             return;
         }
         const bool state = strcmp(second, "ON") == 0;
-        if (strcmp(first, "HEATER") == 0) RelayController::heater(state);
-        else if (strcmp(first, "HUMIDIFIER") == 0) RelayController::humidifier(state);
-        else if (strcmp(first, "FAN") == 0) RelayController::fan(state);
-        else if (strcmp(first, "VENT") == 0) RelayController::ventilation(state);
-        else if (strcmp(first, "TURNER") == 0)
-        {
-            simulatedTurner = state;
-            Serial.printf("[SIMULATION] Turner request %s; motor held OFF\n", state ? "ON" : "OFF");
-        }
+        if (strcmp(first, "HEATER") == 0) setManualSimulatedOutput(SimulatedOutput::Heater, state);
+        else if (strcmp(first, "HUMIDIFIER") == 0) setManualSimulatedOutput(SimulatedOutput::Humidifier, state);
+        else if (strcmp(first, "FAN") == 0) setManualSimulatedOutput(SimulatedOutput::Fan, state);
+        else if (strcmp(first, "VENT") == 0) setManualSimulatedOutput(SimulatedOutput::Ventilation, state);
+        else if (strcmp(first, "TURNER") == 0) setManualSimulatedOutput(SimulatedOutput::Turner, state);
         else Serial.println("[TEST] Unknown output: use HEATER, HUMIDIFIER, FAN, VENT or TURNER.");
         return;
     }
@@ -336,7 +399,7 @@ void printSystemStatus()
 
     Serial.println("===== System Status =====");
     Serial.print("Test mode: ");
-    Serial.println(testMode == TestMode::DRY_RUN ? "DRYRUN" : testMode == TestMode::AUTO ? "AUTO" : "MANUAL");
+    Serial.println(simulationModeName());
     Serial.println("Physical relay and motor outputs: LOCKED OFF");
     Serial.print("Heater safety: ");
     Serial.println(RelayController::heaterSafetyBlocked() ? "INHIBITED" : "READY");

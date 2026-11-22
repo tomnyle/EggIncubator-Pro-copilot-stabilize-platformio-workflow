@@ -19,6 +19,7 @@ public:
 
     void publishAvailability();
     void publishRelayStates();
+    void publishSimulationStates();
     void publishDiagnostics();
     void publishSensorStates();
     void publishAll();
@@ -27,7 +28,7 @@ private:
     static void callback(char *topic, byte *payload, unsigned int length);
 
     void reconnect();
-    void subscribeTopics();
+    bool subscribeTopics();
     void publishDiscovery();
     void publishBirthMessage();
 

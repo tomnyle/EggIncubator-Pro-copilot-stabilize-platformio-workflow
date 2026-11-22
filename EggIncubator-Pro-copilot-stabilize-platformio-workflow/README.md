@@ -51,11 +51,19 @@ serial monitor at 115200 baud, send uppercase commands terminated by Enter:
 Switching modes clears all simulated requests and dry-run inputs. Status and
 `[SIMULATION]` messages distinguish requests from real outputs. The manual
 turner request is only a displayed state: it does not simulate movement or
-limits. Auto does not schedule simulated turns or control fans. MQTT output
-commands are disabled in this build; the MQTT relay states report the actual,
-locked-off outputs. Physical relay and motor outputs remain locked off in all
-three modes even if the `REV3_ALLOW_*` flags are set. These modes do not make
-the firmware production-ready.
+limits. Auto does not schedule simulated turns or control fans. Physical relay
+and motor outputs remain locked off in all three modes even if the
+`REV3_ALLOW_*` flags are set. These modes do not make the firmware
+production-ready.
+
+With Wi-Fi, MQTT and Home Assistant MQTT discovery configured, five separate
+**Simulated** switches control virtual heater, humidifier, fans and turner
+requests in MANUAL. They become unavailable in AUTO or DRYRUN. The Simulation
+Mode and Simulated Heater Safety Inhibit entities show the current mode and
+interlock; an inhibited heater request is rejected. Existing output switches
+are labelled **locked off** and reject commands. Their OFF state is the
+software-commanded output, not proof of actual relay or load feedback. Do not
+retain command messages on the MQTT broker.
 
 The experimental software heater interlock starts inhibited. It blocks and
 clears the simulated heater request at 39.5 °C or on an invalid SHT31 reading,
