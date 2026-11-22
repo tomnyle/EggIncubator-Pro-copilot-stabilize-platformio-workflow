@@ -1,6 +1,7 @@
 #include "mqtt_service.h"
 
 #include <WiFi.h>
+#include <math.h>
 #include "app_config.h"
 #include "logger.h"
 #include "sensor_manager.h"
@@ -8,6 +9,7 @@
 #include "relay_controller.h"
 #include "managers/egg_turner_manager.h"
 #include "incubation_profile.h"
+#include "system_state.h"
 
 extern MQTTService mqtt;
 extern NetworkService network;
@@ -26,6 +28,11 @@ MQTTService::MQTTService()
 
 void MQTTService::begin()
 {
+    if (MQTT_HOST[0] == '\0')
+    {
+        Serial.println("[MQTT] Broker is not configured");
+        return;
+    }
     mqttClient.setServer(MQTT_HOST, MQTT_PORT);
     mqttClient.setKeepAlive(60);
     mqttClient.setSocketTimeout(15);
@@ -51,7 +58,7 @@ bool MQTTService::connected()
 
 void MQTTService::loop()
 {
-    if (!network.connected())
+    if (MQTT_HOST[0] == '\0' || !network.connected())
     {
         mqttConnected = false;
         discoveryPublished = false;
@@ -251,13 +258,10 @@ void MQTTService::publishAvailability()
 
 void MQTTService::publishRelayStates()
 {
-    // Vì RelayController chưa có getter state trong header bạn gửi,
-    // tạm publish OFF cho 4 relay này để không phụ thuộc IncubatorController.
-    // Khi bạn có getter thật, mình đổi lại sau.
-    publish(MQTT_ROOT_TOPIC "/heater/state", "OFF", true);
-    publish(MQTT_ROOT_TOPIC "/humidifier/state", "OFF", true);
-    publish(MQTT_ROOT_TOPIC "/fan/state", "OFF", true);
-    publish(MQTT_ROOT_TOPIC "/vent/state", "OFF", true);
+    publish(MQTT_ROOT_TOPIC "/heater/state", systemState.relay.heater ? "ON" : "OFF", true);
+    publish(MQTT_ROOT_TOPIC "/humidifier/state", systemState.relay.humidifier ? "ON" : "OFF", true);
+    publish(MQTT_ROOT_TOPIC "/fan/state", systemState.relay.circulationFan ? "ON" : "OFF", true);
+    publish(MQTT_ROOT_TOPIC "/vent/state", systemState.relay.ventilationFan ? "ON" : "OFF", true);
 
     publish(MQTT_ROOT_TOPIC "/turner/state", EggTurnerManager::isEnabled() ? "ON" : "OFF", true);
     publish(MQTT_ROOT_TOPIC "/turn_count", String(EggTurnerManager::getTurnCount()), true);
@@ -277,15 +281,27 @@ void MQTTService::publishDiagnostics()
 
 void MQTTService::publishSensorStates()
 {
-    if (SensorManager::isSHT31Ready())
+    if (SensorManager::isSHT31Ready() &&
+        isfinite(SensorManager::getAirTemperature()) &&
+        isfinite(SensorManager::getAirHumidity()))
     {
         publish(MQTT_ROOT_TOPIC "/air_temperature", String(SensorManager::getAirTemperature(), 1), true);
         publish(MQTT_ROOT_TOPIC "/air_humidity", String(SensorManager::getAirHumidity(), 1), true);
     }
+    else
+    {
+        publish(MQTT_ROOT_TOPIC "/air_temperature", "", true);
+        publish(MQTT_ROOT_TOPIC "/air_humidity", "", true);
+    }
 
-    if (SensorManager::isDS18B20Ready())
+    if (SensorManager::isDS18B20Ready() &&
+        isfinite(SensorManager::getEggTemperature()))
     {
         publish(MQTT_ROOT_TOPIC "/egg_temperature", String(SensorManager::getEggTemperature(), 1), true);
+    }
+    else
+    {
+        publish(MQTT_ROOT_TOPIC "/egg_temperature", "", true);
     }
 }
 
@@ -314,13 +330,33 @@ void MQTTService::callback(char *topic, byte *payload, unsigned int length)
     Serial.print(" = ");
     Serial.println(message);
 
+    if (!cmdTopic.endsWith("/profile/set") && message != "ON" && message != "OFF")
+    {
+        Serial.println("[MQTT] Invalid ON/OFF command");
+        return;
+    }
+
+    if ((cmdTopic.endsWith("/heater/set") || cmdTopic.endsWith("/humidifier/set")) &&
+        state && (!SensorManager::isSHT31Ready() ||
+                  !isfinite(SensorManager::getAirTemperature()) ||
+                  !isfinite(SensorManager::getAirHumidity())))
+    {
+        Serial.println("[MQTT] Refusing output: SHT31 reading invalid");
+        mqtt.publishRelayStates();
+        return;
+    }
+
     if (cmdTopic.endsWith("/heater/set")) RelayController::heater(state);
     else if (cmdTopic.endsWith("/humidifier/set")) RelayController::humidifier(state);
     else if (cmdTopic.endsWith("/fan/set")) RelayController::fan(state);
     else if (cmdTopic.endsWith("/vent/set")) RelayController::ventilation(state);
     else if (cmdTopic.endsWith("/turner/set"))
     {
-        if (state) EggTurnerManager::enable();
+        if (state && IncubationProfile::isLockdown(millis()))
+        {
+            Serial.println("[MQTT] Refusing turner: lockdown active");
+        }
+        else if (state) EggTurnerManager::enable();
         else EggTurnerManager::disable();
     }
     else if (cmdTopic.endsWith("/profile/set"))

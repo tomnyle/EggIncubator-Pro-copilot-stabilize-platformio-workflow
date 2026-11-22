@@ -12,6 +12,7 @@
 #include "network_service.h"
 #include "mqtt_service.h"
 #include "incubation_profile.h"
+#include "app_config.h"
 
 extern NetworkService network;
 extern MQTTService mqtt;
@@ -46,8 +47,11 @@ void setup()
     // Apply one-time initial profile values
     applyProfileControl();
 
-    TemperatureManager::enable();
-    HumidityManager::enable();
+    if (REV3_ALLOW_THERMAL_OUTPUTS)
+    {
+        TemperatureManager::enable();
+        HumidityManager::enable();
+    }
 
     Serial.println("[BOOT] network.begin()");
     network.begin();
@@ -71,6 +75,7 @@ void loop()
     network.loop();
     mqtt.loop();
     SensorManager::update();
+    EggTurnerManager::update();
     digitalWrite(PIN_BUZZER, SystemState::getAlarmStatus().buzzerActive ? HIGH : LOW);
 
     uint32_t now = millis();
@@ -83,7 +88,6 @@ void loop()
 
         TemperatureManager::update();
         HumidityManager::update();
-        EggTurnerManager::update();
 
         static uint32_t statusCounter = 0;
         statusCounter++;

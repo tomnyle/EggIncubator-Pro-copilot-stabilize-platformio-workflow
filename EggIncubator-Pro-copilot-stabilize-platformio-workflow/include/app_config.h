@@ -1,6 +1,18 @@
 #ifndef APP_CONFIG_H
 #define APP_CONFIG_H
 
+#if __has_include("app_config.local.h")
+#include "app_config.local.h"
+#endif
+
+// Experimental REV3 build: hazardous outputs remain disabled by default.
+#ifndef REV3_ALLOW_THERMAL_OUTPUTS
+#define REV3_ALLOW_THERMAL_OUTPUTS 0
+#endif
+#ifndef REV3_ALLOW_TURNER
+#define REV3_ALLOW_TURNER 0
+#endif
+
 /********************************************************
  * EggIncubator Pro Configuration
  ********************************************************/
@@ -16,16 +28,28 @@
 
 
 // WiFi
-#define WIFI_SSID            "Le Danh"
-#define WIFI_PASSWORD        "123456789"
+#ifndef WIFI_SSID
+#define WIFI_SSID            ""
+#endif
+#ifndef WIFI_PASSWORD
+#define WIFI_PASSWORD        ""
+#endif
 
 
 // MQTT
-#define MQTT_HOST            "192.168.100.168"
+#ifndef MQTT_HOST
+#define MQTT_HOST            ""
+#endif
+#ifndef MQTT_PORT
 #define MQTT_PORT            1883
+#endif
 
-#define MQTT_USERNAME        "homer"
-#define MQTT_PASSWORD        "Danh@@@1992"
+#ifndef MQTT_USERNAME
+#define MQTT_USERNAME        ""
+#endif
+#ifndef MQTT_PASSWORD
+#define MQTT_PASSWORD        ""
+#endif
 
 
 // MQTT Topic Root

@@ -56,6 +56,11 @@ void NetworkService::loop()
 
 void NetworkService::connectWiFi()
 {
+    if (WIFI_SSID[0] == '\0')
+    {
+        Logger::warning("WiFi is not configured");
+        return;
+    }
     Logger::info("--------------------------------");
     Logger::info("Connecting WiFi...");
     Logger::info("--------------------------------");

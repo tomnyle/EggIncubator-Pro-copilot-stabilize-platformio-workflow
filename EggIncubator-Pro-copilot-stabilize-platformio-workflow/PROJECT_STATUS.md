@@ -1,5 +1,8 @@
 # 📊 EggIncubator Pro - Project Status Report
 
+> Historical report only. The REV3 development build is not production-ready;
+> see README.md for current safety restrictions.
+
 **Date**: July 26, 2026  
 **Project**: Smart Egg Incubator with Home Assistant Integration  
 **Version**: 0.3.0  

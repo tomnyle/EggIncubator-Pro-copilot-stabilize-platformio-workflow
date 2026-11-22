@@ -4,6 +4,7 @@
 
 #include "pins.h"
 #include "system_state.h"
+#include "app_config.h"
 
 /******************************************************
  * Private
@@ -33,6 +34,11 @@ void RelayController::begin()
 
 void RelayController::heater(bool state)
 {
+    if (!REV3_ALLOW_THERMAL_OUTPUTS && state)
+    {
+        Serial.println("[SAFETY] Heater disabled in REV3 test build");
+        state = false;
+    }
     systemState.relay.heater = state;
 
     writeRelay(
@@ -46,6 +52,11 @@ void RelayController::heater(bool state)
 
 void RelayController::humidifier(bool state)
 {
+    if (!REV3_ALLOW_THERMAL_OUTPUTS && state)
+    {
+        Serial.println("[SAFETY] Humidifier disabled in REV3 test build");
+        state = false;
+    }
     systemState.relay.humidifier = state;
 
     writeRelay(

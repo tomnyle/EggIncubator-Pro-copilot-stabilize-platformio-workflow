@@ -3,6 +3,60 @@
 #include "relay_controller.h"
 #include "logger.h"
 #include "pins.h"
+#include "core/system_state.h"
+#include "motor_limits.h"
+#include "app_config.h"
+#include <soc/gpio_struct.h>
+
+namespace {
+static_assert(PIN_DM542_STEP == 32 && PIN_DM542_ENABLE == 23,
+              "ISR GPIO registers must match REV3 motor pins");
+portMUX_TYPE motorMux = portMUX_INITIALIZER_UNLOCKED;
+hw_timer_t *motorTimer = nullptr;
+volatile MotorResult motorResult = MotorResult::Idle;
+volatile uint32_t motorTicks = 0;
+volatile uint8_t targetLimit = PIN_LIMIT_HOME;
+volatile bool pulseHigh = false;
+
+// Runs independently of network and sensor calls so a blocked main loop
+// cannot leave the step signal running past the limit or travel timeout.
+void IRAM_ATTR motorTimerInterrupt()
+{
+    portENTER_CRITICAL_ISR(&motorMux);
+    if (motorResult == MotorResult::Running)
+    {
+        const uint32_t inputs = GPIO.in;
+        const bool home = !(inputs & (1UL << PIN_LIMIT_HOME));
+        const bool end = !(inputs & (1UL << PIN_LIMIT_END));
+        ++motorTicks;
+        motorResult = motorLimitResult(home, end, targetLimit == PIN_LIMIT_HOME,
+                                       motorTicks,
+                                       DM542_MAX_TRAVEL_MS * 2000UL / DM542_STEP_INTERVAL_US);
+
+        if (motorResult != MotorResult::Running)
+        {
+            GPIO.out1_w1tc.val = 1UL << (PIN_DM542_STEP - 32);
+            GPIO.out_w1tc = 1UL << PIN_DM542_ENABLE;
+            pulseHigh = false;
+        }
+        else if (motorTicks == 1)
+        {
+            // Allow the direction and enable signals to settle before the first pulse.
+        }
+        else if (pulseHigh)
+        {
+            GPIO.out1_w1tc.val = 1UL << (PIN_DM542_STEP - 32);
+            pulseHigh = false;
+        }
+        else
+        {
+            GPIO.out1_w1ts.val = 1UL << (PIN_DM542_STEP - 32);
+            pulseHigh = true;
+        }
+    }
+    portEXIT_CRITICAL_ISR(&motorMux);
+}
+}
 
 /******************************************************
  * Static Member Initialization
@@ -21,8 +75,6 @@ uint32_t EggTurnerManager::totalTurns = 0;
 uint8_t EggTurnerManager::stepPin = PIN_DM542_STEP;
 uint8_t EggTurnerManager::directionPin = PIN_DM542_DIR;
 uint8_t EggTurnerManager::enablePin = PIN_DM542_ENABLE;
-uint32_t EggTurnerManager::lastStepMicros = 0;
-bool EggTurnerManager::stepLevel = false;
 
 EggTurnerManager::TurnDirection EggTurnerManager::lastTurnDirection = LEFT;
 
@@ -46,6 +98,16 @@ void EggTurnerManager::begin()
     digitalWrite(directionPin, LOW);
     digitalWrite(enablePin, DM542_ENABLE_INACTIVE);
 
+    motorTimer = timerBegin(0, 80, true);
+    if (motorTimer == nullptr)
+    {
+        Logger::error("DM542 timer unavailable; turner disabled");
+        return;
+    }
+    timerAttachInterrupt(motorTimer, &motorTimerInterrupt, true);
+    timerAlarmWrite(motorTimer, DM542_STEP_INTERVAL_US / 2, true);
+    timerAlarmEnable(motorTimer);
+
     Logger::info(
         ("Turning Interval: " + String(turningIntervalMs / 60000.0f, 1) + " minutes").c_str());
     Logger::info(
@@ -58,26 +120,32 @@ void EggTurnerManager::begin()
 
 void EggTurnerManager::update()
 {
-    if (!controlEnabled)
-    {
-        return;
-    }
-
     uint32_t now = millis();
 
-    // Check if currently turning and need to stop
     if (turnerRunning)
     {
-        uint32_t turnElapsed = now - turnStartTime;
-        updateStepPulse(micros());
-
-        if (turnElapsed >= turnDurationMs)
+        portENTER_CRITICAL(&motorMux);
+        const MotorResult result = motorResult;
+        portEXIT_CRITICAL(&motorMux);
+        if (result != MotorResult::Running)
         {
             stopTurner();
             turnerRunning = false;
+            if (result == MotorResult::Reached)
+            {
+                totalTurns++;
+                Logger::info("Turn completed at limit switch");
+            }
+            else
+            {
+                controlEnabled = false;
+                SystemState::triggerAlarm(SystemState::ALARM_MOTOR_ERROR,
+                                          result == MotorResult::Timeout ?
+                                          "Turner travel timeout" : "Turner limit switch fault");
+            }
         }
     }
-    else
+    else if (controlEnabled)
     {
         // Check if time for next turn
         uint32_t timeSinceLastTurn = now - lastTurnTime;
@@ -152,9 +220,18 @@ void EggTurnerManager::enable()
 {
     if (!controlEnabled)
     {
+        if (!REV3_ALLOW_TURNER)
+        {
+            Logger::error("Turner disabled in REV3 test build");
+            return;
+        }
+        if (motorTimer == nullptr || SystemState::getAlarmStatus().alarmActive)
+        {
+            Logger::error("Cannot enable turner: timer unavailable or alarm active");
+            return;
+        }
         controlEnabled = true;
         lastTurnTime = millis();
-        totalTurns = 0;
         turnerRunning = false;
 
         Logger::info("Egg Turning ENABLED");
@@ -246,23 +323,37 @@ void EggTurnerManager::performTurn()
         return;  // Already turning
     }
 
-    // Determine next turn direction (alternate left/right)
-    TurnDirection nextDirection = getOppositeTurnDirection(lastTurnDirection);
+    const bool home = digitalRead(PIN_LIMIT_HOME) == LOW;
+    const bool end = digitalRead(PIN_LIMIT_END) == LOW;
+    if (home && end)
+    {
+        controlEnabled = false;
+        SystemState::triggerAlarm(SystemState::ALARM_MOTOR_ERROR, "Both limit switches active");
+        return;
+    }
 
-    // Start motor
+    // GPIO33 HIGH moves toward HOME. If between switches, home first.
+    TurnDirection nextDirection = home ? LEFT : RIGHT;
+    if (totalTurns > 0 && !home && !end)
+        nextDirection = getOppositeTurnDirection(lastTurnDirection);
+
     setMotorDirection(nextDirection);
     digitalWrite(stepPin, LOW);
-    stepLevel = false;
-    lastStepMicros = micros();
+    delayMicroseconds(50);
+    portENTER_CRITICAL(&motorMux);
+    targetLimit = nextDirection == RIGHT ? PIN_LIMIT_HOME : PIN_LIMIT_END;
+    motorTicks = 0;
+    pulseHigh = false;
+    motorResult = MotorResult::Running;
     digitalWrite(enablePin, DM542_ENABLE_ACTIVE);
+    portEXIT_CRITICAL(&motorMux);
     turnerRunning = true;
     turnStartTime = millis();
 
-    totalTurns++;
     lastTurnDirection = nextDirection;
 
     Logger::info(
-        ("Turn #" + String(totalTurns) +
+        ("Turn #" + String(totalTurns + 1) +
          " started (" + String(nextDirection == LEFT ? "LEFT" : "RIGHT") + ")").c_str());
 }
 
@@ -272,9 +363,12 @@ void EggTurnerManager::performTurn()
 
 void EggTurnerManager::stopTurner()
 {
+    portENTER_CRITICAL(&motorMux);
+    motorResult = MotorResult::Idle;
     digitalWrite(stepPin, LOW);
     digitalWrite(enablePin, DM542_ENABLE_INACTIVE);
-    stepLevel = false;
+    pulseHigh = false;
+    portEXIT_CRITICAL(&motorMux);
 
     lastTurnTime = millis();
 
@@ -290,19 +384,6 @@ void EggTurnerManager::stopTurner()
 void EggTurnerManager::setMotorDirection(TurnDirection direction)
 {
     digitalWrite(directionPin, direction == RIGHT ? HIGH : LOW);
-}
-
-void EggTurnerManager::updateStepPulse(uint32_t nowMicros)
-{
-    if (static_cast<uint32_t>(nowMicros - lastStepMicros) <
-        DM542_STEP_INTERVAL_US / 2)
-    {
-        return;
-    }
-
-    lastStepMicros = nowMicros;
-    stepLevel = !stepLevel;
-    digitalWrite(stepPin, stepLevel ? HIGH : LOW);
 }
 
 /******************************************************

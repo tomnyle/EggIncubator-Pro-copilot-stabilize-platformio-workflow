@@ -120,6 +120,8 @@ void SensorManager::updateSHT31()
     }
     else
     {
+        airTemp = NAN;
+        airHumidity = NAN;
         Logger::warning("SHT31: Invalid reading");
     }
 }
@@ -145,6 +147,7 @@ void SensorManager::updateDS18B20()
     }
     else
     {
+        eggTemp = NAN;
         Logger::warning("DS18B20: Invalid reading");
     }
 }

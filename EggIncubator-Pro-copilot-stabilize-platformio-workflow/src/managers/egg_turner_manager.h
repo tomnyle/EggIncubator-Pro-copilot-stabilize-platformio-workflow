@@ -93,8 +93,6 @@ private:
     static uint8_t stepPin;
     static uint8_t directionPin;
     static uint8_t enablePin;
-    static uint32_t lastStepMicros;
-    static bool stepLevel;
 
     // Turn direction tracking
     enum TurnDirection
@@ -118,11 +116,6 @@ private:
      * Control DM542 direction
      ******************************************************/
     static void setMotorDirection(TurnDirection direction);
-
-    /******************************************************
-     * Generate one non-blocking DM542 step pulse
-     ******************************************************/
-    static void updateStepPulse(uint32_t nowMicros);
 
     /******************************************************
      * Get opposite turn direction

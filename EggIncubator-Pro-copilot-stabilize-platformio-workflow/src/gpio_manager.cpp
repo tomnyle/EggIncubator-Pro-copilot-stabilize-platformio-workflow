@@ -17,6 +17,7 @@ void GPIOManager::begin()
     pinMode(PIN_FAN_VENT, OUTPUT);
 
     // DM542 STEP/DIR are configured by EggTurnerManager.
+    digitalWrite(PIN_DM542_ENABLE, DM542_ENABLE_INACTIVE);
     pinMode(PIN_DM542_ENABLE, OUTPUT);
 
     digitalWrite(PIN_BUZZER, LOW);

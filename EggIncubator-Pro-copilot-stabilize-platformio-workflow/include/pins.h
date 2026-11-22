@@ -40,16 +40,9 @@
 #define PIN_DM542_DIR            33
 #define PIN_DM542_ENABLE         23
 #define DM542_STEP_INTERVAL_US   1000
+#define DM542_MAX_TRAVEL_MS      15000
 #define DM542_ENABLE_ACTIVE      HIGH
 #define DM542_ENABLE_INACTIVE    LOW
-
-// Compatibility aliases for code that still refers to motor control pins.
-#define PIN_BTS_RPWM             PIN_DM542_STEP
-#define PIN_BTS_LPWM             PIN_DM542_DIR
-#define PIN_BTS_ENABLE           PIN_DM542_ENABLE
-#define PIN_MOTOR_LEFT           PIN_DM542_STEP
-#define PIN_MOTOR_RIGHT          PIN_DM542_DIR
-#define PIN_MOTOR_ENABLE         PIN_DM542_ENABLE
 
 /**********************************************************************
  * LIMIT SWITCH
