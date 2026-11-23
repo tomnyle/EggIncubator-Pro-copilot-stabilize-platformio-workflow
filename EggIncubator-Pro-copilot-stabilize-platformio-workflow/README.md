@@ -45,3 +45,21 @@ watchdog protection. Do not connect heaters or humidifiers.
 
 This only builds experimental firmware; it does not validate hardware. Motor
 and thermal outputs remain disabled in the default configuration.
+
+## Select an incubation profile
+
+The existing experimental profiles are `CHICKEN`, `QUAIL`, `DUCK` and `GOOSE`.
+Their setpoints and schedules must be verified for the actual eggs and machine;
+they are not validated recipes.
+
+* Serial: open the monitor at 115200 baud, select a line ending and send, for
+  example, `PROFILE DUCK`. Profile names are case-insensitive.
+* Home Assistant: configure Wi-Fi and MQTT in `app_config.local.h`, then select
+  the desired option in the discovered **Incubation Profile** entity. The MQTT
+  command topic is `eggincubator/profile/set` and the state topic is
+  `eggincubator/profile/state`.
+
+Changing to a different profile restarts the batch at day 1; selecting the
+current profile again does not. After a reboot the profile returns to CHICKEN
+and the day resets to 1. Neither the selection nor the elapsed day is persisted,
+so do not use this firmware for an unattended incubation.

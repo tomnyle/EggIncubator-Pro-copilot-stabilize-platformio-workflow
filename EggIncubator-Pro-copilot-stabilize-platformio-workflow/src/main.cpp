@@ -13,6 +13,7 @@
 #include "mqtt_service.h"
 #include "incubation_profile.h"
 #include "app_config.h"
+#include "serial_line.h"
 
 extern NetworkService network;
 extern MQTTService mqtt;
@@ -22,6 +23,7 @@ uint32_t updateInterval = 1000;
 
 void printSystemStatus();
 void applyProfileControl();
+void handleSerialCommands();
 
 void setup()
 {
@@ -61,6 +63,7 @@ void setup()
 
     lastUpdateTime = millis();
     Serial.println("[BOOT] Initialization done.");
+    Serial.println("[SERIAL] Use PROFILE CHICKEN|QUAIL|DUCK|GOOSE");
 }
 
 void loop()
@@ -72,6 +75,7 @@ void loop()
         Serial.println("[LOOP] network.loop() + mqtt.loop()");
     }
 
+    handleSerialCommands();
     network.loop();
     mqtt.loop();
     SensorManager::update();
@@ -99,6 +103,35 @@ void loop()
     }
 
     delay(10);
+}
+
+void handleSerialCommands()
+{
+    static SerialLine input;
+    for (unsigned int i = 0; i < 64 && Serial.available(); ++i)
+    {
+        const auto result = input.feed(static_cast<char>(Serial.read()));
+        if (result == SerialLine::Result::Invalid)
+        {
+            Serial.println("[SERIAL] Invalid or too long command");
+        }
+        else if (result == SerialLine::Result::Ready)
+        {
+            String command(input.line());
+            command.trim();
+            command.toUpperCase();
+            if (!command.startsWith("PROFILE ") ||
+                !IncubationProfile::setProfileByCode(command.substring(8), millis()))
+            {
+                Serial.println("[SERIAL] Use PROFILE CHICKEN|QUAIL|DUCK|GOOSE");
+                continue;
+            }
+            applyProfileControl();
+            mqtt.publishRelayStates();
+            Serial.print("[SERIAL] Profile: ");
+            Serial.println(IncubationProfile::currentCode());
+        }
+    }
 }
 
 void applyProfileControl()

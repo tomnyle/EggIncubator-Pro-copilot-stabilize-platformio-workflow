@@ -17,4 +17,6 @@ jobs:
           python-version: '3.12'
       - run: pip install platformio
       - run: g++ -std=c++17 -Iinclude test/test_motor_limits.cpp -o /tmp/motor_limits && /tmp/motor_limits
+      - run: g++ -std=c++17 -Iinclude test/test_serial_line.cpp -o /tmp/serial_line && /tmp/serial_line
+      - run: g++ -std=c++17 -Itest/stubs -Isrc test/test_incubation_profile.cpp src/incubator_controller.cpp -o /tmp/incubation_profile && /tmp/incubation_profile
       - run: pio run -e esp32_upesy
