@@ -88,3 +88,16 @@ software interlock does not replace an independent hardware cutoff.
 
 This only builds experimental firmware; it does not validate hardware. Motor
 and thermal outputs remain disabled in the default configuration.
+
+## Select an incubation profile
+
+Select `CHICKEN`, `QUAIL`, `DUCK` or `GOOSE` using the Home Assistant
+**Incubation Profile** entity, or send e.g. `PROFILE DUCK` in the serial
+monitor. Profile names are case-insensitive. The other serial commands above
+are uppercase. The MQTT command topic is `eggincubator/profile/set` and the
+state topic is `eggincubator/profile/state`.
+
+Changing profile restarts the batch at day 1; selecting the current profile
+does not. Reboot resets the selection to CHICKEN and the day to 1. The recipes,
+setpoints and schedules are experimental and must be verified for the eggs
+and equipment. Do not use this firmware for incubation.

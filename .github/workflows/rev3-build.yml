@@ -1,7 +1,7 @@
 name: REV3 build
 on:
   push:
-    branches: ['copilot/rev3-firmware']
+    branches: ['copilot/rev3-firmware', 'copilot/rev3-modes-and-profiles']
   pull_request:
 
 jobs:
@@ -17,4 +17,8 @@ jobs:
           python-version: '3.12'
       - run: pip install platformio
       - run: g++ -std=c++17 -Iinclude test/test_motor_limits.cpp -o /tmp/motor_limits && /tmp/motor_limits
+      - run: g++ -std=c++17 -Itest/host -Iinclude -Isrc test/test_incubation_profile.cpp src/incubator_controller.cpp -o /tmp/incubation_profile && /tmp/incubation_profile
+      - run: g++ -std=c++17 -Itest/host -Iinclude -Isrc test/test_mode_commands.cpp src/incubator_controller.cpp src/relay_controller.cpp src/system_state.cpp src/managers/temperature_manager.cpp src/managers/humidity_manager.cpp src/controllers/pid_controller.cpp -o /tmp/mode_commands && /tmp/mode_commands
+      - run: g++ -std=c++17 -Itest/host -Iinclude -Isrc test/test_simulation.cpp src/relay_controller.cpp src/system_state.cpp src/managers/temperature_manager.cpp src/managers/humidity_manager.cpp src/controllers/pid_controller.cpp -o /tmp/simulation && /tmp/simulation
+      - run: g++ -std=c++17 -Itest/host -Iinclude -Isrc -include test/host/mqtt_stubs.h -DMQTT_HOST='"broker"' test/test_mqtt_simulation.cpp src/mqtt_service.cpp src/incubator_controller.cpp src/relay_controller.cpp src/system_state.cpp -o /tmp/mqtt_simulation && /tmp/mqtt_simulation
       - run: pio run -e esp32_upesy

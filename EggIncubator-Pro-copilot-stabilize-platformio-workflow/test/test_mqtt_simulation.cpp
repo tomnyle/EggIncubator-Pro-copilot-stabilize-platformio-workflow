@@ -98,6 +98,8 @@ int main(int argc, char **argv)
     const std::string &temperatureConfig = published.at("homeassistant/number/eggincubator01/dryrun_temperature/config");
     const std::string &humidityConfig = published.at("homeassistant/number/eggincubator01/dryrun_humidity/config");
     assert(modeConfig.find("\"options\":[\"MANUAL\",\"AUTO\",\"DRYRUN\"]") != std::string::npos);
+    assert(published.at("homeassistant/select/eggincubator01/profile/config")
+               .find("\"options\":[\"CHICKEN\",\"QUAIL\",\"DUCK\",\"GOOSE\"]") != std::string::npos);
     assert(temperatureConfig.find("\"unit_of_measurement\":\"°C\"") != std::string::npos);
     assert(humidityConfig.find("\"unit_of_measurement\":\"%\"") != std::string::npos);
     assert(modeConfig.size() < 1024 && temperatureConfig.size() < 1024 && humidityConfig.size() < 1024);
@@ -126,6 +128,12 @@ int main(int argc, char **argv)
     assert(!RelayController::simulatedFan());
     activeClient->inject("eggincubator/simulation/mode/set", "DRYRUN");
     assert(dryRunMode && !manualMode);
+    activeClient->inject("eggincubator/profile/set", "duck");
+    assert(published.at("eggincubator/profile/state") == "DUCK");
+    assert(published.at("eggincubator/simulation/mode") == "DRYRUN");
+    activeClient->inject("eggincubator/profile/set", "invalid");
+    assert(published.at("eggincubator/profile/state") == "DUCK");
+    assert(pinValues[PIN_HEATER_SSR] == RELAY_OFF);
     assert(published.at("eggincubator/simulation/dryrun/availability") == "online");
     activeClient->inject("eggincubator/simulation/input/temperature/set", "35.2");
     activeClient->inject("eggincubator/simulation/input/humidity/set", "44.7");

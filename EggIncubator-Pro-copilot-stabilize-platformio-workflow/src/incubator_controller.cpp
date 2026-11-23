@@ -22,6 +22,7 @@ void IncubationProfile::begin(IncubationProfileType profile, uint32_t startMilli
 
 void IncubationProfile::setProfile(IncubationProfileType profile, uint32_t nowMillis)
 {
+    if (profile == activeProfile) return;
     activeProfile = profile;
     batchStartMillis = nowMillis; // reset batch day count
 }

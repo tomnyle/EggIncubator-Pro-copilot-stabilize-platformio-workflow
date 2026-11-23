@@ -300,6 +300,22 @@ void processCommand(char *command)
         return;
     }
 
+    if (strcmp(verb, "PROFILE") == 0 && first && !second)
+    {
+        if (IncubationProfile::setProfileByCode(String(first), millis()))
+        {
+            applyProfileControl();
+            mqtt.publishRelayStates();
+            Serial.print("[PROFILE] Selected: ");
+            Serial.println(IncubationProfile::currentCode());
+        }
+        else
+        {
+            Serial.println("[PROFILE] Invalid profile: use CHICKEN, QUAIL, DUCK or GOOSE.");
+        }
+        return;
+    }
+
     if (strcmp(verb, "INPUT") == 0 && first && second && !extra)
     {
         if (testMode != TestMode::DRY_RUN)
@@ -349,7 +365,7 @@ void processCommand(char *command)
         else Serial.println("[TEST] Unknown output: use HEATER, HUMIDIFIER, FAN, VENT or TURNER.");
         return;
     }
-    Serial.println("[TEST] Commands: MODE MANUAL|AUTO|DRYRUN, INPUT <temp> <humidity>, SET <output> ON|OFF.");
+    Serial.println("[TEST] Commands: MODE MANUAL|AUTO|DRYRUN, PROFILE CHICKEN|QUAIL|DUCK|GOOSE, INPUT <temp> <humidity>, SET <output> ON|OFF.");
 }
 
 void setTestMode(TestMode mode)

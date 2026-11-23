@@ -4,7 +4,7 @@
 #define SENSOR_MANAGER_H
 #define NETWORK_SERVICE_H
 #define EGG_TURNER_MANAGER_H
-#define INCUBATION_PROFILE_H
+#include "incubation_profile.h"
 
 class SensorManager
 {
@@ -21,12 +21,4 @@ class EggTurnerManager
 public:
     static bool isEnabled() { return false; }
     static unsigned long getTurnCount() { return 0; }
-};
-class IncubationProfile
-{
-public:
-    static const char *currentCode() { return "CHICKEN"; }
-    static int currentDay(uint32_t) { return 1; }
-    static bool isLockdown(uint32_t) { return false; }
-    static bool setProfileByCode(const String &, uint32_t) { return true; }
 };

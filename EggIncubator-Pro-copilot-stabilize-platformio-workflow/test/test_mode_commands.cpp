@@ -11,7 +11,6 @@
 #define EGG_TURNER_MANAGER_H
 #define NETWORK_SERVICE_H
 #define MQTT_SERVICE_H
-#define INCUBATION_PROFILE_H
 
 class GPIOManager { public: static void begin() {} };
 class SensorManager
@@ -57,30 +56,11 @@ public:
     void begin() {}
     void loop() {}
     void publishSimulationStates() { ++simulationPublishCount; }
+    void publishRelayStates() {}
 };
 int MQTTService::simulationPublishCount = 0;
 NetworkService network;
 MQTTService mqtt;
-enum class IncubationProfileType { CHICKEN };
-struct FakeProfile
-{
-    const char *name = "Chicken";
-    uint16_t totalDays = 21;
-    float tempSetpointC = 37.5f;
-    float humidityLockdown = 68.0f;
-    float humidityIncubation = 55.0f;
-    uint16_t turnIntervalMin = 120;
-    uint16_t turnDurationSec = 5;
-};
-class IncubationProfile
-{
-public:
-    static void begin(IncubationProfileType, uint32_t) {}
-    static const FakeProfile &current() { static FakeProfile p; return p; }
-    static uint16_t currentDay(uint32_t) { return 1; }
-    static bool isLockdown(uint32_t) { return false; }
-};
-
 #include "../src/main.cpp"
 
 FakeSerial Serial;
@@ -102,6 +82,18 @@ int main()
 {
     setup();
     assert(testMode == TestMode::MANUAL);
+    for (const char *name : {"QUAIL", "DUCK", "GOOSE", "CHICKEN"})
+    {
+        send(std::string("PROFILE ") + name);
+        assert(std::string(IncubationProfile::currentCode()) == name);
+    }
+    send("PROFILE duck");
+    assert(std::string(IncubationProfile::currentCode()) == "DUCK");
+    send("PROFILE QUAIL EXTRA");
+    send("PROFILE UNKNOWN");
+    assert(std::string(IncubationProfile::currentCode()) == "DUCK");
+    assert(testMode == TestMode::MANUAL);
+    send("PROFILE CHICKEN");
     publishSimulationChanges();
     const int initialPublishCount = MQTTService::simulationPublishCount;
     publishSimulationChanges();
