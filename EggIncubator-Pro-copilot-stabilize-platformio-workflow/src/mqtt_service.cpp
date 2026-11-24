@@ -11,6 +11,7 @@
 #include "incubation_profile.h"
 #include "system_state.h"
 #include "operating_mode.h"
+#include "safety_monitor.h"
 
 extern MQTTService mqtt;
 extern NetworkService network;
@@ -74,12 +75,25 @@ void MQTTService::loop()
 
     mqttClient.loop();
 
+    static bool lastAlarm = false;
+    static String lastAlarmMessage;
+    const bool alarm = SafetyMonitor::isAlarmActive();
+    const String alarmMessage = SafetyMonitor::alarmMessage();
+    if (alarm != lastAlarm || alarmMessage != lastAlarmMessage)
+    {
+        publishAlarm();
+        publishRelayStates();
+        lastAlarm = alarm;
+        lastAlarmMessage = alarmMessage;
+    }
+
     if (millis() - lastPublish >= PUBLISH_INTERVAL)
     {
         lastPublish = millis();
         publishDiagnostics();
         publishRelayStates();
         publishSensorStates();
+        publishAlarm();
     }
 }
 
@@ -117,6 +131,7 @@ void MQTTService::reconnect()
     publishRelayStates();
     publishDiagnostics();
     publishSensorStates();
+    publishAlarm();
 }
 
 void MQTTService::subscribeTopics()
@@ -128,6 +143,7 @@ void MQTTService::subscribeTopics()
     mqttClient.subscribe(MQTT_ROOT_TOPIC "/turner/set");
     mqttClient.subscribe(MQTT_ROOT_TOPIC "/profile/set");
     mqttClient.subscribe(MQTT_ROOT_TOPIC "/mode/set");
+    mqttClient.subscribe(MQTT_ROOT_TOPIC "/alarm/reset");
     Serial.println("[MQTT] Subscribe OK");
 }
 
@@ -229,6 +245,36 @@ void MQTTService::publishDiscovery()
             "\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\","
             + deviceJson + "}", true);
 
+    publish("homeassistant/binary_sensor/" DEVICE_ID "/alarm/config",
+            "{"
+            "\"name\":\"Alarm\","
+            "\"uniq_id\":\"" DEVICE_ID "_alarm\","
+            "\"stat_t\":\"" MQTT_ROOT_TOPIC "/alarm/state\","
+            "\"dev_cla\":\"problem\","
+            "\"pl_on\":\"ON\",\"pl_off\":\"OFF\","
+            "\"avty_t\":\"" MQTT_ROOT_TOPIC "/status\","
+            "\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\","
+            + deviceJson + "}", true);
+
+    publish("homeassistant/sensor/" DEVICE_ID "/alarm_detail/config",
+            "{"
+            "\"name\":\"Alarm Detail\","
+            "\"uniq_id\":\"" DEVICE_ID "_alarm_detail\","
+            "\"stat_t\":\"" MQTT_ROOT_TOPIC "/alarm/detail\","
+            "\"avty_t\":\"" MQTT_ROOT_TOPIC "/status\","
+            "\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\","
+            + deviceJson + "}", true);
+
+    publish("homeassistant/button/" DEVICE_ID "/alarm_reset/config",
+            "{"
+            "\"name\":\"Reset Alarm\","
+            "\"uniq_id\":\"" DEVICE_ID "_alarm_reset\","
+            "\"cmd_t\":\"" MQTT_ROOT_TOPIC "/alarm/reset\","
+            "\"pl_prs\":\"PRESS\","
+            "\"avty_t\":\"" MQTT_ROOT_TOPIC "/status\","
+            "\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\","
+            + deviceJson + "}", true);
+
     publish("homeassistant/sensor/" DEVICE_ID "/incubation_day/config",
             "{"
             "\"name\":\"Incubation Day\","
@@ -293,6 +339,13 @@ void MQTTService::publishDiagnostics()
     publish(MQTT_ROOT_TOPIC "/free_heap", String(ESP.getFreeHeap()), true);
 }
 
+void MQTTService::publishAlarm()
+{
+    publish(MQTT_ROOT_TOPIC "/alarm/state", SafetyMonitor::isAlarmActive() ? "ON" : "OFF", true);
+    publish(MQTT_ROOT_TOPIC "/alarm/detail",
+            SafetyMonitor::isAlarmActive() ? SafetyMonitor::alarmMessage() : String("NONE"), true);
+}
+
 void MQTTService::publishSensorStates()
 {
     if (SensorManager::isSHT31Ready() &&
@@ -325,6 +378,7 @@ void MQTTService::publishAll()
     publishDiagnostics();
     publishRelayStates();
     publishSensorStates();
+    publishAlarm();
 }
 
 void MQTTService::callback(char *topic, byte *payload, unsigned int length)
@@ -343,6 +397,17 @@ void MQTTService::callback(char *topic, byte *payload, unsigned int length)
     Serial.print(cmdTopic);
     Serial.print(" = ");
     Serial.println(message);
+
+    if (cmdTopic == MQTT_ROOT_TOPIC "/alarm/reset")
+    {
+        if (message != "PRESS")
+            Serial.println("[MQTT] Invalid alarm reset command");
+        else if (!SafetyMonitor::clearAlarm())
+            Serial.println("[MQTT] Alarm reset rejected");
+        mqtt.publishAlarm();
+        mqtt.publishRelayStates();
+        return;
+    }
 
     if (cmdTopic == MQTT_ROOT_TOPIC "/mode/set")
     {

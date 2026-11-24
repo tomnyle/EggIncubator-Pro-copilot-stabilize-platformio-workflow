@@ -22,6 +22,8 @@ bool SensorManager::sht31Ready = false;
 bool SensorManager::ds18b20Ready = false;
 
 unsigned long SensorManager::lastSHT31Update = 0;
+unsigned long SensorManager::lastSHT31Valid = 0;
+bool SensorManager::sht31HasValidReading = false;
 unsigned long SensorManager::lastDS18B20Update = 0;
 
 const uint32_t SensorManager::SHT31_UPDATE_INTERVAL = 2000;    // 2 seconds
@@ -79,10 +81,19 @@ void SensorManager::update()
     uint32_t now = millis();
 
     // Update SHT31
-    if (sht31Ready && (now - lastSHT31Update >= SHT31_UPDATE_INTERVAL))
+    if (now - lastSHT31Update >= SHT31_UPDATE_INTERVAL)
     {
         lastSHT31Update = now;
-        updateSHT31();
+        if (!sht31Ready)
+        {
+            sht31Ready = sht31.begin(0x44);
+            if (sht31Ready)
+                Logger::info("SHT31 reconnected");
+            else
+                Logger::warning("SHT31 still unavailable");
+        }
+        if (sht31Ready)
+            updateSHT31();
     }
 
     // Update DS18B20
@@ -114,6 +125,8 @@ void SensorManager::updateSHT31()
     {
         airTemp = temp;
         airHumidity = humidity;
+        lastSHT31Valid = millis();
+        sht31HasValidReading = true;
 
         Logger::debug(
             ("SHT31: T=" + String(temp, 1) + "°C, H=" + String(humidity, 1) + "%").c_str());
@@ -122,6 +135,7 @@ void SensorManager::updateSHT31()
     {
         airTemp = NAN;
         airHumidity = NAN;
+        sht31HasValidReading = false;
         Logger::warning("SHT31: Invalid reading");
     }
 }
@@ -158,7 +172,7 @@ void SensorManager::updateDS18B20()
 
 float SensorManager::getAirTemperature()
 {
-    return airTemp;
+    return sht31HasValidReading && millis() - lastSHT31Valid <= 5000 ? airTemp : NAN;
 }
 
 /******************************************************
@@ -167,7 +181,7 @@ float SensorManager::getAirTemperature()
 
 float SensorManager::getAirHumidity()
 {
-    return airHumidity;
+    return sht31HasValidReading && millis() - lastSHT31Valid <= 5000 ? airHumidity : NAN;
 }
 
 /******************************************************

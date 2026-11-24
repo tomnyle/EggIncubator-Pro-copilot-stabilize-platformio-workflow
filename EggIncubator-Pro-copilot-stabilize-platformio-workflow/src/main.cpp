@@ -14,6 +14,7 @@
 #include "incubation_profile.h"
 #include "app_config.h"
 #include "operating_mode.h"
+#include "safety_monitor.h"
 
 extern NetworkService network;
 extern MQTTService mqtt;
@@ -39,6 +40,7 @@ void setup()
     SystemState::begin();
     RelayController::begin();
     SensorManager::begin();
+    SafetyMonitor::begin();
     TemperatureManager::begin();
     HumidityManager::begin();
     EggTurnerManager::begin();
@@ -69,8 +71,8 @@ void loop()
     }
 
     EggTurnerManager::update();
-    OperatingModeController::update();
     SensorManager::update();
+    SafetyMonitor::update();
     if (!isfinite(SensorManager::getAirTemperature()) ||
         !isfinite(SensorManager::getAirHumidity()))
     {

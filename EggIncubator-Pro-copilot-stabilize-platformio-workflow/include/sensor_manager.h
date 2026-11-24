@@ -50,6 +50,8 @@ private:
     static bool ds18b20Ready;
 
     static unsigned long lastSHT31Update;
+    static unsigned long lastSHT31Valid;
+    static bool sht31HasValidReading;
     static unsigned long lastDS18B20Update;
 
     static const uint32_t SHT31_UPDATE_INTERVAL;

@@ -40,6 +40,18 @@ automatic temperature, humidity, turning and circulation fan, but is rejected
 while either REV3 safety lock is active. The default build keeps both locks
 active; it cannot operate the heater, humidifier or motor.
 
+MQTT discovery also exposes an alarm, alarm detail, and reset button. SHT31
+failure or air temperature at or above 40 C, both limit switches active, or
+turner travel timeout latch an alarm and turn all outputs off. Reset is refused
+while SHT31 readings are invalid or at least 40 C, both limits are active, or
+the motor is moving. Alarm state is stored in ESP32 nonvolatile memory; reset
+leaves the mode OFF. Reporting depends on network and MQTT availability.
+If alarm storage fails, the serial log reports the failure and the firmware
+must not be used; persistence cannot be guaranteed during that failure.
+The firmware cannot detect an open/shorted heater or humidifier, welded relay,
+motor stall, or a normally-open switch wire break without additional feedback.
+Software safety is not an independent hardware overtemperature cutoff.
+
 ## Configure and build
 
 1. Copy `include/app_config.local.h.example` to `include/app_config.local.h`
