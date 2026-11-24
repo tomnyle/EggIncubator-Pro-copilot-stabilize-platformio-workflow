@@ -93,6 +93,12 @@ bool SafetyMonitor::isAlarmActive()
     return SystemState::getAlarmStatus().alarmActive;
 }
 
+bool SafetyMonitor::canEnableThermalOutput()
+{
+    return !SystemState::getAlarmStatus().alarmActive &&
+           currentSensorFault() == SensorFault::None;
+}
+
 String SafetyMonitor::alarmMessage()
 {
     return SystemState::getAlarmStatus().alarmMessage;

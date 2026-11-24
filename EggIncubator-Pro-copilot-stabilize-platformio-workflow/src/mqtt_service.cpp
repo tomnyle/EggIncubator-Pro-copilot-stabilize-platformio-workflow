@@ -439,16 +439,6 @@ void MQTTService::callback(char *topic, byte *payload, unsigned int length)
         return;
     }
 
-    if ((cmdTopic.endsWith("/heater/set") || cmdTopic.endsWith("/humidifier/set")) &&
-        state && (!SensorManager::isSHT31Ready() ||
-                  !isfinite(SensorManager::getAirTemperature()) ||
-                  !isfinite(SensorManager::getAirHumidity())))
-    {
-        Serial.println("[MQTT] Refusing output: SHT31 reading invalid");
-        mqtt.publishRelayStates();
-        return;
-    }
-
     if (cmdTopic.endsWith("/heater/set")) RelayController::heater(state);
     else if (cmdTopic.endsWith("/humidifier/set")) RelayController::humidifier(state);
     else if (cmdTopic.endsWith("/fan/set")) RelayController::fan(state);

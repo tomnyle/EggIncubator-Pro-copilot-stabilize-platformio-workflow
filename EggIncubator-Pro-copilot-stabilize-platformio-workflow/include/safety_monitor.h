@@ -9,5 +9,6 @@ public:
     static void update();
     static bool clearAlarm();
     static bool isAlarmActive();
+    static bool canEnableThermalOutput();
     static String alarmMessage();
 };

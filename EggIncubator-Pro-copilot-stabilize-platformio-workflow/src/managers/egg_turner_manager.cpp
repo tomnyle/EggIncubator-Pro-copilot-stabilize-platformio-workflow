@@ -225,11 +225,6 @@ void EggTurnerManager::enable()
 {
     if (!controlEnabled)
     {
-        if (!REV3_ALLOW_TURNER)
-        {
-            Logger::error("Turner disabled in REV3 test build");
-            return;
-        }
         if (motorTimer == nullptr || SystemState::getAlarmStatus().alarmActive)
         {
             Logger::error("Cannot enable turner: timer unavailable or alarm active");

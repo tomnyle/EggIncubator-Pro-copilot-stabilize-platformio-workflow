@@ -5,6 +5,8 @@
 #include "pins.h"
 #include "system_state.h"
 #include "app_config.h"
+#include "operating_mode.h"
+#include "safety_monitor.h"
 
 /******************************************************
  * Private
@@ -34,9 +36,10 @@ void RelayController::begin()
 
 void RelayController::heater(bool state)
 {
-    if (!REV3_ALLOW_THERMAL_OUTPUTS && state)
+    if (state && (OperatingModeController::current() == OperatingMode::Off ||
+                  !SafetyMonitor::canEnableThermalOutput()))
     {
-        Serial.println("[SAFETY] Heater disabled in REV3 test build");
+        Serial.println("[SAFETY] Heater request rejected: mode or sensor safety");
         state = false;
     }
     systemState.relay.heater = state;
@@ -52,9 +55,10 @@ void RelayController::heater(bool state)
 
 void RelayController::humidifier(bool state)
 {
-    if (!REV3_ALLOW_THERMAL_OUTPUTS && state)
+    if (state && (OperatingModeController::current() == OperatingMode::Off ||
+                  !SafetyMonitor::canEnableThermalOutput()))
     {
-        Serial.println("[SAFETY] Humidifier disabled in REV3 test build");
+        Serial.println("[SAFETY] Humidifier request rejected: mode or sensor safety");
         state = false;
     }
     systemState.relay.humidifier = state;

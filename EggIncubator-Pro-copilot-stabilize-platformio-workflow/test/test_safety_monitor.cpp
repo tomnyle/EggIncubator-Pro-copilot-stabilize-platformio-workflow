@@ -43,20 +43,25 @@ int main()
     SafetyMonitor::begin();
     SafetyMonitor::update();
     assert(!SafetyMonitor::isAlarmActive());
+    assert(SafetyMonitor::canEnableThermalOutput());
 
     temperature = 40.0f;
+    assert(!SafetyMonitor::canEnableThermalOutput());
     SafetyMonitor::update();
     assert(SafetyMonitor::isAlarmActive() && stopped && testStoredAlarm);
     assert(!SafetyMonitor::clearAlarm());
     temperature = 39.9f;
+    assert(!SafetyMonitor::canEnableThermalOutput());
     SafetyMonitor::update();
     assert(SafetyMonitor::isAlarmActive());
     moving = true;
     assert(!SafetyMonitor::clearAlarm());
     moving = false;
     assert(SafetyMonitor::clearAlarm() && !testStoredAlarm);
+    assert(SafetyMonitor::canEnableThermalOutput());
 
     ready = false;
+    assert(!SafetyMonitor::canEnableThermalOutput());
     SafetyMonitor::update();
     assert(SafetyMonitor::isAlarmActive() && testStoredAlarm);
     assert(!SafetyMonitor::clearAlarm());

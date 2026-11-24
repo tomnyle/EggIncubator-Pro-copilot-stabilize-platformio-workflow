@@ -1,8 +1,8 @@
 # EggIncubator Pro — REV3 development build
 
-**Not production-ready.** Heater, humidifier and DM542 motion are disabled by
-default. Disconnect all power loads during initial checks. Do not use this
-build for incubation.
+**Not production-ready.** The device starts in OFF. MANUAL can operate outputs
+when safety checks pass; disconnect all power loads during initial checks and
+do not use this build for incubation.
 
 ## REV3 signal mapping
 
@@ -34,11 +34,13 @@ Profile day resets after reboot, and heater control lacks production-grade indep
 watchdog protection. Do not connect heaters or humidifiers.
 
 MQTT discovery exposes `Operating Mode` with OFF, MANUAL and AUTO. The device
-always starts in OFF. MANUAL accepts individual output commands; the turner ON
-command requests a single trip to a limit. OFF stops all outputs. AUTO requests
+always starts in OFF. MANUAL accepts individual output commands; heater and
+humidifier are rejected if the SHT31 is invalid or temperature is 40 C or
+higher. The turner ON command requests one trip to a limit, with a 15-second
+timeout. OFF stops all outputs. AUTO requests
 automatic temperature, humidity, turning and circulation fan, but is rejected
-while either REV3 safety lock is active. The default build keeps both locks
-active; it cannot operate the heater, humidifier or motor.
+while the REV3 thermal AUTO lock is active. MANUAL is not disabled by that
+AUTO-only lock.
 
 MQTT discovery also exposes an alarm, alarm detail, and reset button. SHT31
 failure or air temperature at or above 40 C, both limit switches active, or
@@ -61,5 +63,6 @@ Software safety is not an independent hardware overtemperature cutoff.
 3. If the build succeeds, `pio run -e esp32_upesy -t upload` uploads to the
    connected ESP32. Use `pio device monitor -b 115200` for logs.
 
-This only builds experimental firmware; it does not validate hardware. Motor
-and thermal outputs remain disabled in the default configuration.
+This only builds experimental firmware; it does not validate hardware. Verify
+the relay behavior, DM542 ENA polarity, limit switches, and travel timeout
+without eggs or heater loads before any operational use.

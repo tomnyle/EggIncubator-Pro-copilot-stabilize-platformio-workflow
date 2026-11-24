@@ -5,7 +5,7 @@
 #include "app_config.local.h"
 #endif
 
-// Experimental REV3 build: hazardous outputs remain disabled by default.
+// Experimental REV3 build: AUTO remains disabled until hardware validation.
 #ifndef REV3_ALLOW_THERMAL_OUTPUTS
 #define REV3_ALLOW_THERMAL_OUTPUTS 0
 #endif
@@ -20,7 +20,7 @@
 
 // Firmware
 #define FIRMWARE_NAME        "EggIncubator Pro"
-#define FIRMWARE_VERSION     "0.3.0-rev3-dev3"
+#define FIRMWARE_VERSION     "0.3.0-rev3-dev4"
 
 
 // Device
