@@ -20,7 +20,7 @@
 
 // Firmware
 #define FIRMWARE_NAME        "EggIncubator Pro"
-#define FIRMWARE_VERSION     "0.3.0"
+#define FIRMWARE_VERSION     "0.3.0-rev3-dev2"
 
 
 // Device

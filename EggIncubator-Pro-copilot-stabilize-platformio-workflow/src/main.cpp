@@ -13,6 +13,7 @@
 #include "mqtt_service.h"
 #include "incubation_profile.h"
 #include "app_config.h"
+#include "operating_mode.h"
 
 extern NetworkService network;
 extern MQTTService mqtt;
@@ -25,16 +26,17 @@ void applyProfileControl();
 
 void setup()
 {
+    GPIOManager::begin();
     Serial.begin(115200);
     delay(1000);
 
     Serial.println("[BOOT] setup entered");
+    Serial.println("[BOOT] " FIRMWARE_NAME " " FIRMWARE_VERSION);
 
     Logger::begin(115200);
     Serial.println("[BOOT] logger started");
 
     SystemState::begin();
-    GPIOManager::begin();
     RelayController::begin();
     SensorManager::begin();
     TemperatureManager::begin();
@@ -46,12 +48,6 @@ void setup()
 
     // Apply one-time initial profile values
     applyProfileControl();
-
-    if (REV3_ALLOW_THERMAL_OUTPUTS)
-    {
-        TemperatureManager::enable();
-        HumidityManager::enable();
-    }
 
     Serial.println("[BOOT] network.begin()");
     network.begin();
@@ -72,10 +68,17 @@ void loop()
         Serial.println("[LOOP] network.loop() + mqtt.loop()");
     }
 
+    EggTurnerManager::update();
+    OperatingModeController::update();
+    SensorManager::update();
+    if (!isfinite(SensorManager::getAirTemperature()) ||
+        !isfinite(SensorManager::getAirHumidity()))
+    {
+        RelayController::heater(false);
+        RelayController::humidifier(false);
+    }
     network.loop();
     mqtt.loop();
-    SensorManager::update();
-    EggTurnerManager::update();
     digitalWrite(PIN_BUZZER, SystemState::getAlarmStatus().buzzerActive ? HIGH : LOW);
 
     uint32_t now = millis();

@@ -30,9 +30,15 @@ indistinguishable from an open switch; independent hardware protection is
 required. The timer, input polarities, movement and mechanical safety are not
 validated on the physical board.
 
-Profile day resets after reboot, operating-mode selection is not implemented,
-and heater control lacks production-grade independent overtemperature and
+Profile day resets after reboot, and heater control lacks production-grade independent overtemperature and
 watchdog protection. Do not connect heaters or humidifiers.
+
+MQTT discovery exposes `Operating Mode` with OFF, MANUAL and AUTO. The device
+always starts in OFF. MANUAL accepts individual output commands; the turner ON
+command requests a single trip to a limit. OFF stops all outputs. AUTO requests
+automatic temperature, humidity, turning and circulation fan, but is rejected
+while either REV3 safety lock is active. The default build keeps both locks
+active; it cannot operate the heater, humidifier or motor.
 
 ## Configure and build
 

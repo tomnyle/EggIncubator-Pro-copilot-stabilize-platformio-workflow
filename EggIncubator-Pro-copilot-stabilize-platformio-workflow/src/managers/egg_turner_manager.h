@@ -83,6 +83,7 @@ private:
     // State tracking
     static bool controlEnabled;
     static bool turnerRunning;
+    static bool oneShot;
 
     // Timing
     static uint32_t lastTurnTime;       // Timestamp of last turn (ms)

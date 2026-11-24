@@ -67,6 +67,7 @@ uint32_t EggTurnerManager::turnDurationMs = 5000UL;       // 5 seconds (default)
 
 bool EggTurnerManager::controlEnabled = false;
 bool EggTurnerManager::turnerRunning = false;
+bool EggTurnerManager::oneShot = false;
 
 uint32_t EggTurnerManager::lastTurnTime = 0;
 uint32_t EggTurnerManager::turnStartTime = 0;
@@ -134,6 +135,8 @@ void EggTurnerManager::update()
             if (result == MotorResult::Reached)
             {
                 totalTurns++;
+                if (oneShot)
+                    controlEnabled = false;
                 Logger::info("Turn completed at limit switch");
             }
             else
@@ -205,11 +208,13 @@ uint16_t EggTurnerManager::getTurnDuration()
 
 void EggTurnerManager::manualTurn()
 {
-    if (controlEnabled)
-    {
-        performTurn();
-        Logger::info("Manual turn initiated");
-    }
+    if (turnerRunning)
+        return;
+    enable();
+    if (!controlEnabled)
+        return;
+    oneShot = true;
+    performTurn();
 }
 
 /******************************************************
@@ -231,6 +236,7 @@ void EggTurnerManager::enable()
             return;
         }
         controlEnabled = true;
+        oneShot = false;
         lastTurnTime = millis();
         turnerRunning = false;
 

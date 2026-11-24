@@ -17,4 +17,6 @@ jobs:
           python-version: '3.12'
       - run: pip install platformio
       - run: g++ -std=c++17 -Iinclude test/test_motor_limits.cpp -o /tmp/motor_limits && /tmp/motor_limits
+      - run: g++ -std=c++17 -Iinclude -Isrc test/test_operating_mode.cpp -o /tmp/mode_locked && /tmp/mode_locked
+      - run: g++ -std=c++17 -Iinclude -Isrc -DREV3_ALLOW_THERMAL_OUTPUTS=1 -DREV3_ALLOW_TURNER=1 test/test_operating_mode.cpp -o /tmp/mode_auto && /tmp/mode_auto
       - run: pio run -e esp32_upesy

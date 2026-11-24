@@ -10,6 +10,7 @@
 #include "managers/egg_turner_manager.h"
 #include "incubation_profile.h"
 #include "system_state.h"
+#include "operating_mode.h"
 
 extern MQTTService mqtt;
 extern NetworkService network;
@@ -126,6 +127,7 @@ void MQTTService::subscribeTopics()
     mqttClient.subscribe(MQTT_ROOT_TOPIC "/vent/set");
     mqttClient.subscribe(MQTT_ROOT_TOPIC "/turner/set");
     mqttClient.subscribe(MQTT_ROOT_TOPIC "/profile/set");
+    mqttClient.subscribe(MQTT_ROOT_TOPIC "/mode/set");
     Serial.println("[MQTT] Subscribe OK");
 }
 
@@ -216,6 +218,17 @@ void MQTTService::publishDiscovery()
             "\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\","
             + deviceJson + "}", true);
 
+    publish("homeassistant/select/" DEVICE_ID "/operating_mode/config",
+            "{"
+            "\"name\":\"Operating Mode\","
+            "\"uniq_id\":\"" DEVICE_ID "_operating_mode\","
+            "\"cmd_t\":\"" MQTT_ROOT_TOPIC "/mode/set\","
+            "\"stat_t\":\"" MQTT_ROOT_TOPIC "/mode/state\","
+            "\"options\":[\"OFF\",\"MANUAL\",\"AUTO\"],"
+            "\"avty_t\":\"" MQTT_ROOT_TOPIC "/status\","
+            "\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\","
+            + deviceJson + "}", true);
+
     publish("homeassistant/sensor/" DEVICE_ID "/incubation_day/config",
             "{"
             "\"name\":\"Incubation Day\","
@@ -258,6 +271,7 @@ void MQTTService::publishAvailability()
 
 void MQTTService::publishRelayStates()
 {
+    publish(MQTT_ROOT_TOPIC "/mode/state", OperatingModeController::name(), true);
     publish(MQTT_ROOT_TOPIC "/heater/state", systemState.relay.heater ? "ON" : "OFF", true);
     publish(MQTT_ROOT_TOPIC "/humidifier/state", systemState.relay.humidifier ? "ON" : "OFF", true);
     publish(MQTT_ROOT_TOPIC "/fan/state", systemState.relay.circulationFan ? "ON" : "OFF", true);
@@ -330,9 +344,33 @@ void MQTTService::callback(char *topic, byte *payload, unsigned int length)
     Serial.print(" = ");
     Serial.println(message);
 
+    if (cmdTopic == MQTT_ROOT_TOPIC "/mode/set")
+    {
+        bool valid = true;
+        OperatingMode requested = OperatingMode::Off;
+        if (message == "OFF") requested = OperatingMode::Off;
+        else if (message == "MANUAL") requested = OperatingMode::Manual;
+        else if (message == "AUTO") requested = OperatingMode::Auto;
+        else valid = false;
+        if (!valid)
+            Serial.println("[MQTT] Invalid operating mode");
+        else if (!OperatingModeController::set(requested))
+            Serial.println("[MQTT] Operating mode rejected");
+        mqtt.publishRelayStates();
+        return;
+    }
+
     if (!cmdTopic.endsWith("/profile/set") && message != "ON" && message != "OFF")
     {
         Serial.println("[MQTT] Invalid ON/OFF command");
+        return;
+    }
+
+    if (!cmdTopic.endsWith("/profile/set") &&
+        OperatingModeController::current() != OperatingMode::Manual)
+    {
+        Serial.println("[MQTT] Output commands require MANUAL mode");
+        mqtt.publishRelayStates();
         return;
     }
 
@@ -356,7 +394,7 @@ void MQTTService::callback(char *topic, byte *payload, unsigned int length)
         {
             Serial.println("[MQTT] Refusing turner: lockdown active");
         }
-        else if (state) EggTurnerManager::enable();
+        else if (state) EggTurnerManager::manualTurn();
         else EggTurnerManager::disable();
     }
     else if (cmdTopic.endsWith("/profile/set"))
